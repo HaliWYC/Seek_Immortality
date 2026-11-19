@@ -8,6 +8,12 @@ public static class DemoRegion
     public static bool AtPass => Current && Current.Place == MapPlace.Pass;
     public static bool InTown => !Current || Current.Place == MapPlace.Town;
     public static bool Busy => Current && (Current.LogOpen || RegionalPractice.Busy);
+    internal static float? LiveMana => Current && Current.MatchesCampaign ? Current.Mana : (float?)null;
+
+    internal static void ApplyMana(float mana)
+    {
+        if (Current && Current.MatchesCampaign) Current.ApplyMana(mana);
+    }
 
     public static void Depart()
     {

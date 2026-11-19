@@ -12,6 +12,38 @@ public sealed class DemoCharacter
     public float x, y;
     public int area, herbalShifts;
     public DemoCultivation cultivation = new DemoCultivation();
+    [SerializeField] bool hasMana;
+    [SerializeField] float mana;
+
+    public int ManaCapacity => cultivation.Attributes(sensed).ManaCapacity;
+    public float Mana
+    {
+        get
+        {
+            if (!hasMana) StoreMana(ReadLegacyMana());
+            return Mathf.Clamp(mana, 0f, ManaCapacity);
+        }
+    }
+
+    // Both prior archives kept the last pool in the saved route, even in town.
+    float ReadLegacyMana()
+    {
+        if (string.IsNullOrEmpty(regionData)) return ManaCapacity;
+        try
+        {
+            var route = new TravelModel();
+            route.SetManaCapacity(ManaCapacity);
+            if (route.Restore(JsonUtility.FromJson<TravelCheckpoint>(regionData))) return route.Mana;
+        }
+        catch (ArgumentException) { }
+        return ManaCapacity;
+    }
+
+    internal void StoreMana(float value)
+    {
+        mana = Mathf.Clamp(value, 0f, ManaCapacity);
+        hasMana = true;
+    }
 }
 
 [DefaultExecutionOrder(-160)]
@@ -19,8 +51,9 @@ public sealed partial class DemoRun : MonoBehaviour
 {
     public const string TownScene = "QingxiTrail";
     public const string RegionScene = "SampleScene";
-    const string Archive = "Qinglan.FirstVolume.1.";
-    enum Page { Title, Story, Sandbox, Confirm, Play, Guide, Cultivate, Menu, Epitaph }
+    const string PreviousArchive = "Qinglan.FirstVolume.1.";
+    const string Archive = "Qinglan.FirstVolume.2.";
+    enum Page { Title, Story, Sandbox, Confirm, Play, Guide, Cultivate, Menu, Epitaph, Character }
     static DemoRun host;
     static DemoCharacter character;
     Page page;
@@ -45,6 +78,8 @@ public sealed partial class DemoRun : MonoBehaviour
     public static bool IsDisciple => Active && character.disciple;
     public static string Name => Active ? character.name : "沈砚";
     public static DemoCultivation State => character?.cultivation;
+    public static int ManaCapacity => Active ? character.ManaCapacity : 100;
+    public static float Mana => Active ? DemoRegion.LiveMana ?? character.Mana : ManaCapacity;
     public static bool InSect => Active && character.regional && DemoRegion.InSect;
     public static bool AtPass => Active && character.regional && DemoRegion.AtPass;
     public static bool InTown => Active && (character.regional ? DemoRegion.InTown :
@@ -54,15 +89,22 @@ public sealed partial class DemoRun : MonoBehaviour
     public static string AmbushData { get => character?.ambushData ?? ""; set { if (Active) character.ambushData = value; } }
     public static bool Slain => Active && !string.IsNullOrEmpty(character.death);
     public static bool SpendStones(int amount) => Active && !Slain && State.Spend(amount);
-    public static void EndLife(string cause)
+    public static void EndLife(string cause, bool showEpitaph = true)
     {
         if (!Active || Slain) return;
         character.death = string.IsNullOrEmpty(cause) ? "命殒青岚山境。" : cause;
         Save();
-        host.Show(Page.Epitaph);
+        if (showEpitaph) ShowEpitaph();
+    }
+    internal static void ShowEpitaph()
+    {
+        if (host && Slain) host.Show(Page.Epitaph);
     }
     public static string Key(string leaf) => Archive + (character?.id ?? "standalone") + "." + leaf;
-    internal static string Slot(bool sandbox) => Archive + (sandbox ? "Sandbox" : "Story");
+    // First-volume saves generated the bandits' motive from this exact key.
+    public static string AmbushSeed => PreviousArchive + (character?.id ?? "standalone") + ".ambush";
+    static string Slot(bool sandbox, string archive = Archive) => archive + (sandbox ? "Sandbox" : "Story");
+    static bool HasSlot(bool sandbox) => PlayerPrefs.HasKey(Slot(sandbox)) || PlayerPrefs.HasKey(Slot(sandbox, PreviousArchive));
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetRuntime() { host = null; character = null; }
@@ -110,7 +152,8 @@ public sealed partial class DemoRun : MonoBehaviour
 
     static DemoCharacter ReadSlot(bool sandbox)
     {
-        string json = PlayerPrefs.GetString(Slot(sandbox), "");
+        string source = PlayerPrefs.HasKey(Slot(sandbox)) ? Slot(sandbox) : Slot(sandbox, PreviousArchive);
+        string json = PlayerPrefs.GetString(source, "");
         if (string.IsNullOrEmpty(json)) return null;
         try
         {
@@ -171,6 +214,7 @@ public sealed partial class DemoRun : MonoBehaviour
             item.area = (int)QingxiArea.Gate;
         }
         if (sandbox) item.cultivation.Earn(item.wanderer ? 2 : 3);
+        item.cultivation.Bag.TryClaimStartingGear();
         string journal = import ? LegacyJournal() : "";
         if (journal.Length > 0)
         {
@@ -191,6 +235,12 @@ public sealed partial class DemoRun : MonoBehaviour
         if (Active) { DemoRegion.Flush(); Save(); }
         loading = true;
         character = next;
+        if (!PlayerPrefs.HasKey(Slot(next.sandbox)))
+        {
+            string oldHerbs = PreviousArchive + next.id + ".herbal";
+            if (PlayerPrefs.HasKey(oldHerbs)) PlayerPrefs.SetString(Key("herbal"), PlayerPrefs.GetString(oldHerbs));
+        }
+        BrigandTerms.RestoreLegacyWard();
         BrigandTerms.ResolveInterruptedDuel();
         PlayerPrefs.SetInt(Archive + "LastSlot", next.sandbox ? 1 : 0);
         Save();
@@ -224,8 +274,34 @@ public sealed partial class DemoRun : MonoBehaviour
                 host.writtenFeet = p;
             }
         }
+        character.StoreMana(character.Mana);
         PlayerPrefs.SetString(Slot(Sandbox), JsonUtility.ToJson(character));
         PlayerPrefs.Save();
+    }
+
+    internal static void CaptureMana(float balance)
+    {
+        if (Active) character.StoreMana(balance);
+    }
+
+    // Keep the live route in sync first, otherwise a save during an encounter
+    // could capture the old balance from the regional scene.
+    internal static bool ApplyFieldMana(float balance)
+    {
+        if (!Active || balance == Mana) return false;
+        character.StoreMana(balance);
+        DemoRegion.ApplyMana(character.Mana);
+        return true;
+    }
+
+    internal static string RestInQingxi()
+    {
+        if (!Active || character.regional || Slain || State.Expired) return "";
+        if (Mana >= ManaCapacity) return "当前法力充沛。";
+        State.AddTravelMinutes(120d);
+        character.StoreMana(ManaCapacity);
+        Save();
+        return $"静坐一个时辰，法力恢复至 {ManaCapacity}。";
     }
 
     public static void MarkRegion()
@@ -297,6 +373,8 @@ public sealed partial class DemoRun : MonoBehaviour
         if (State.Expired) { OpenCultivation(); return; }
         if (keys.f1Key.wasPressedThisFrame) OpenCultivation();
         else if (keys.f2Key.wasPressedThisFrame) OpenMenu();
+        else if (keys.cKey.wasPressedThisFrame) OpenCharacter();
+        else if (keys.bKey.wasPressedThisFrame) OpenCharacter(true);
         else if (keys.mKey.wasPressedThisFrame && AtGate) DemoRegion.Depart();
     }
 

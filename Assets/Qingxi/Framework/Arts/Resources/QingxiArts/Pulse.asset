@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40a54fba6e7249a9a3cf37f1b8428a67, type: 3}
+  m_Name: Pulse
+  m_EditorClassIdentifier:
+  id: spell.pulse
+  displayName: 合气指
+  description: 点破四格内敌人的气脉。厚土配金或火，相生为自己回复两点气血；配木或水，相克使此次伤害加二。土配土无附效。
+  source: 栖霞山门 · 随知客演练
+  rarity: 1
+  miniRarity: 0
+  shuXing: 4
+  faShuType: 0
+  sourceType: 0
+  target: 1
+  duration: 0
+  level: 1
+  proficiency: 0
+  effect: 3
+  range: 4
+  extraPower: 0
+  cooldownTurns: 0
+  conversionAmount: 0
+  trainingDays: 1
+  manaCost: 4
+  actionPointCost: 0
+  fixedCosts:
+  - element: 4
+    amount: 1
+  sameCost: 1
+  effectAmount: 2

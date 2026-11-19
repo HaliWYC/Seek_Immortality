@@ -1,21 +1,25 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable]
-public sealed class DemoCultivation
+public sealed partial class DemoCultivation
 {
-    public const int Bottleneck = 12;
+    public static int Bottleneck => CultivationRealms.Table.Get(RealmMajor.QiRefining, RealmPhase.Complete).MinimumQi;
     public const int FoundationGoal = 12;
     public const int MaxTurns = 7;
-    public const int PillPrice = 4;
+    public static int PillPrice => FirstVolumeItems.Find(FirstVolumeItems.FoundationPill).Price;
+    public static int DewPrice => FirstVolumeItems.Find(FirstVolumeItems.MeridianDew).Price;
     public const int ArtPrice = 5;
     public const int LastMortalDay = 64 * 360;
-    public static readonly string[] Elements = { "木", "火", "土", "金", "水" };
+    public static readonly string[] Elements = SpiritRoots.ElementNames;
 
     [SerializeField] bool manual, hired, accepted, fulfilled, prizedPicked;
     [SerializeField] int meetDay, qi, stones, days, herbs, pills, injuries, quality, attempts;
     [SerializeField] double travelMinutes;
     [SerializeField] bool dew, art, foundation;
+    [SerializeField] CultivatorBag inventory;
+    [SerializeField] int inventoryVersion;
     [SerializeField] bool copiedRoll;
     [SerializeField] int rollDay;
     [SerializeField] int retreatLeft;
@@ -24,28 +28,45 @@ public sealed class DemoCultivation
     [SerializeField] bool single, converted, usedDew;
     [SerializeField] int[] pool = new int[5];
     [SerializeField] string note = "";
+    [SerializeField] List<string> knownArts;
 
-    public bool Manual => manual;
+    // Old saves recorded just one manual and one technique. Import them by ID on first use.
+    List<string> KnownArts
+    {
+        get
+        {
+            if (knownArts == null) knownArts = new List<string>();
+            if (manual && !knownArts.Contains(QingxiArts.GuiyuanId)) knownArts.Add(QingxiArts.GuiyuanId);
+            if (art && !knownArts.Contains(QingxiArts.ReturnFlowId)) knownArts.Add(QingxiArts.ReturnFlowId);
+            manual = false;
+            art = false;
+            return knownArts;
+        }
+    }
+
+    public bool KnowsArt(string id) => KnownArts.Contains(id);
+    public bool Manual => KnowsArt(QingxiArts.GuiyuanId);
+    public bool KnowsFirebolt => KnowsArt(QingxiArts.FireboltId);
     public bool Foundation => foundation;
-    public bool CanFly => qi >= 6 || foundation;
+    public bool CanFly => Attributes(true).CanFly;
     public bool Expired => !foundation && days >= LastMortalDay;
     public int Qi => qi;
-    public int Stones => stones;
+    public int Stones => Bag.Count(FirstVolumeItems.SpiritStone);
     public int Days => days;
     public int Injuries => injuries;
-    public int Herbs => herbs;
-    public int Pills => pills;
+    public int Herbs => Bag.Count(FirstVolumeItems.JadeHerb);
+    public int Pills => Bag.Count(FirstVolumeItems.FoundationPill);
     public int Quality => quality;
     public int Attempts => attempts;
-    public bool Dew => dew;
-    public bool Art => art;
+    public bool Dew => Bag.Count(FirstVolumeItems.MeridianDew) > 0;
+    public bool Art => KnowsArt(QingxiArts.ReturnFlowId);
     public bool Pact => accepted;
     public bool Fulfilled => fulfilled;
     public bool CopiedRoll => copiedRoll;
     public int RollDay => rollDay;
     public int PactDays => Mathf.Max(0, 180 - (days - meetDay));
-    public bool CanAcceptPact => manual && !accepted && PactDays > 0 && !Expired;
-    public bool CanDeliverPact => accepted && !fulfilled && PactDays > 0 && herbs > 0 && !Expired;
+    public bool CanAcceptPact => Manual && !accepted && PactDays > 0 && !Expired;
+    public bool CanDeliverPact => accepted && !fulfilled && PactDays > 0 && Herbs > 0 && !Expired;
     public int RetreatLeft => retreatLeft;
     public bool ReceiveLetters => receiveLetters;
     public bool ReadingLetter => readingLetter;
@@ -59,21 +80,45 @@ public sealed class DemoCultivation
     public bool Converted => converted;
     public string Note => note ?? "";
     public int Age => 16 + days / 360;
-    public string Realm => foundation ? "筑基初期" : qi >= Bottleneck ? "炼气圆满" : qi >= 9 ? "炼气后期" : qi >= 6 ? "炼气中期" : qi > 0 ? "炼气初期" : "初感灵气";
+    public string Realm => Attributes(true).Realm.Name;
+    public CultivatorAttributes Attributes(bool sensed)
+    {
+        var bag = Bag;
+        return new CultivatorAttributes(CultivationRealms.Table.Resolve(sensed, qi, foundation), quality,
+            bag.Equipped(CultivationGearSlot.Weapon), bag.Equipped(CultivationGearSlot.Clothing),
+            bag.Equipped(CultivationGearSlot.Accessory));
+    }
     public string QualityName => quality >= 3 ? "澄明道基" : quality == 2 ? "敦厚道基" : "初成道基";
     public int Spirit(int element) => element >= 0 && element < 5 && pool != null && pool.Length == 5 ? pool[element] : 0;
     public bool Free => !Expired && !InTrial && retreatLeft == 0 && !readingLetter;
 
-    public void Earn(int amount)
+    public CultivatorBag Bag
     {
-        if (amount > 0) stones = (int)Math.Min(int.MaxValue, (long)stones + amount);
+        get
+        {
+            if (inventoryVersion == 0)
+            {
+                inventory = CultivatorBag.FromFirstVolume(stones, herbs, pills, dew);
+                inventoryVersion = 1;
+                stones = herbs = pills = 0;
+                dew = false;
+            }
+            return inventory ?? (inventory = new CultivatorBag());
+        }
     }
 
-    public bool Spend(int amount)
+    public void Earn(int amount)
     {
-        if (amount < 0 || amount > stones) return false;
-        stones -= amount;
-        return true;
+        if (amount > 0) Bag.TryAdd(FirstVolumeItems.SpiritStone, Math.Min(amount, int.MaxValue - Stones));
+    }
+
+    public bool Spend(int amount) => Bag.TryRemove(FirstVolumeItems.SpiritStone, amount);
+
+    bool ReceiveItem(string payment, int cost, string item, int amount = 1)
+    {
+        if (Bag.TryExchange(payment, cost, item, amount)) return true;
+        note = "行囊余格不足。整理妥当再来，旧约与手中物资都还在。";
+        return false;
     }
 
     public void AddTravelMinutes(double minutes)
@@ -93,8 +138,9 @@ public sealed class DemoCultivation
 
     public bool AcceptManual()
     {
-        if (!Free || manual) return false;
-        manual = true; meetDay = days;
+        if (!Free || Manual) return false;
+        KnownArts.Add(QingxiArts.GuiyuanId);
+        meetDay = days;
         note = "栖霞宗知客借你《归元篇》。同来求法的姜遥约你一同留意隘口的玉髓芝。";
         return true;
     }
@@ -109,7 +155,7 @@ public sealed class DemoCultivation
 
     public bool CopySectRoll()
     {
-        if (!Free || !manual || (copiedRoll && rollDay == days)) return false;
+        if (!Free || !Manual || (copiedRoll && rollDay == days)) return false;
         copiedRoll = true; rollDay = days;
         note = $"你抄下了第 {days} 日的外门值事簿，两名弟子的近况已落笔。";
         return true;
@@ -139,7 +185,13 @@ public sealed class DemoCultivation
     public bool DeliverPact()
     {
         if (!Free || !CanDeliverPact) return false;
-        herbs--; fulfilled = true; pills++; Earn(2);
+        if (Stones > int.MaxValue - 2)
+        {
+            note = "钱袋已满，腾出两块灵石的空位再来领酬。";
+            return false;
+        }
+        if (!ReceiveItem(FirstVolumeItems.JadeHerb, 1, FirstVolumeItems.FoundationPill)) return false;
+        fulfilled = true; Earn(2);
         note = "你如约交芝。姜遥分给你一枚筑基丹和两块灵石，将你的名字留在自己的寻药册里。";
         return true;
     }
@@ -148,7 +200,7 @@ public sealed class DemoCultivation
     {
         get
         {
-            if (!manual) return "栖霞山门有知客接待来访修士。";
+            if (!Manual) return "栖霞山门有知客接待来访修士。";
             if (fulfilled) return "姜遥已收到玉髓芝。她在山门为你留下配丹心得，往后买归流术只收三块灵石。";
             if (PactDays == 0) return accepted ? "约期已过。姜遥托人另寻药材，山门柜上留着她的结算单。" : "姜遥自行寻药后离开山门，收药的旧帖已撤下。";
             int elapsed = days - meetDay;
@@ -161,10 +213,10 @@ public sealed class DemoCultivation
 
     public bool Gather()
     {
-        if (!Free || !manual) return false;
+        if (!Free || !Manual) return false;
         bool first = !prizedPicked && days - meetDay + 15 < 90;
+        if (!ReceiveItem(null, 0, FirstVolumeItems.JadeHerb, first ? 2 : 1)) return false;
         if (first) prizedPicked = true;
-        herbs += first ? 2 : 1;
         Advance(15);
         note = first ? "你先于姜遥赶到芝圃，用十五日采到头茬玉髓芝两株。" : "你在石壁间守了十五日，采得玉髓芝一株。";
         return true;
@@ -172,8 +224,9 @@ public sealed class DemoCultivation
 
     public bool CollectDew()
     {
-        if (!Free || !manual || dew || injuries == 0) return false;
-        dew = true; Advance(30);
+        if (!Free || !Manual || Dew || injuries == 0) return false;
+        if (!ReceiveItem(null, 0, FirstVolumeItems.MeridianDew)) return false;
+        Advance(30);
         note = "你候满三十个清晨，集成一瓶护脉露。下次冲关可选用。";
         return true;
     }
@@ -188,33 +241,46 @@ public sealed class DemoCultivation
 
     public bool BuyPill()
     {
-        if (!Free || !manual || stones < PillPrice) return false;
-        stones -= PillPrice; pills++; note = "柜上取出一枚筑基丹。服丹之时由你自定。"; return true;
+        if (!Free || !Manual || Stones < PillPrice) return false;
+        if (!ReceiveItem(FirstVolumeItems.SpiritStone, PillPrice, FirstVolumeItems.FoundationPill)) return false;
+        note = "柜上取出一枚筑基丹。服丹之时由你自定。"; return true;
     }
 
     public bool MakePill()
     {
-        if (!Free || !manual || herbs < 2) return false;
-        herbs -= 2; pills++; Advance(10); note = "用两株玉髓芝合炉十日，取出一枚筑基丹。"; return true;
+        if (!Free || !Manual || Herbs < 2) return false;
+        if (!ReceiveItem(FirstVolumeItems.JadeHerb, 2, FirstVolumeItems.FoundationPill)) return false;
+        Advance(10); note = "用两株玉髓芝合炉十日，取出一枚筑基丹。"; return true;
     }
 
     public int CurrentArtPrice => fulfilled ? 3 : ArtPrice;
     public bool LearnArt()
     {
-        if (!Free || !manual || art || stones < CurrentArtPrice) return false;
-        stones -= CurrentArtPrice; art = true; note = "你习得五行归流术，冲关时每转可导两缕异气入选中的一脉。"; return true;
+        if (!Free || !Manual || Art || !Spend(CurrentArtPrice)) return false;
+        KnownArts.Add(QingxiArts.ReturnFlowId);
+        note = $"你习得{QingxiArts.ReturnFlow.Name}。{QingxiArts.ReturnFlow.Description}";
+        return true;
     }
+
+    public bool CanLearnFirebolt(bool inSect) => CanStudyAtGate(QingxiArts.Firebolt, inSect);
+
+    public bool LearnFirebolt(bool inSect) => StudyAtGate(QingxiArts.Firebolt, inSect);
 
     public bool SeekDoctor()
     {
-        if (!Free || injuries == 0 || dew || stones < 3) return false;
-        stones -= 3; dew = true; note = "医者交你一瓶护脉露，冲关前服下，可暂时镇住旧伤。"; return true;
+        int price = DewPrice;
+        if (!Free || injuries == 0 || Dew || Stones < price) return false;
+        if (!ReceiveItem(FirstVolumeItems.SpiritStone, price, FirstVolumeItems.MeridianDew)) return false;
+        note = "医者交你一瓶护脉露，冲关前服下，可暂时镇住旧伤。"; return true;
     }
 
     public bool StartRetreat(int seasons, bool listen)
     {
-        if (!Free || !manual || foundation || qi >= Bottleneck || (seasons != 1 && seasons != 3)) return false;
-        retreatLeft = Mathf.Min(seasons, (Bottleneck - qi + 2) / 3);
+        if (!Free || !Manual || foundation || (seasons != 1 && seasons != 3)) return false;
+        var book = MainManual;
+        int limit = Mathf.Min(Bottleneck, book.MaximumQi);
+        if (qi >= limit) return false;
+        retreatLeft = Mathf.Min(seasons, (limit - qi + book.QiPerSeason - 1) / book.QiPerSeason);
         receiveLetters = listen; note = "你收拾起居，自行排定了出关时日。"; return true;
     }
 
@@ -223,7 +289,8 @@ public sealed class DemoCultivation
         if (retreatLeft <= 0 || readingLetter || Expired) return false;
         retreatLeft--; Advance(90);
         if (Expired) return true;
-        qi = Mathf.Min(Bottleneck, qi + 3);
+        var book = MainManual;
+        qi = Mathf.Min(Bottleneck, book.MaximumQi, qi + book.QiPerSeason);
         note = qi == Bottleneck ? "一季周天走完，气海已满。你可以主动准备冲关。" : $"这一季收功，已至{Realm}。";
         if (receiveLetters && !fulfilled && !letterSeen && days - meetDay >= 60 && PactDays > 0)
         {
@@ -247,11 +314,12 @@ public sealed class DemoCultivation
 
     public bool StartTrial(bool singleRoot, int dose, bool suppress)
     {
-        if (!Free || !manual || foundation || qi < Bottleneck || dose < 0 || dose > Mathf.Min(pills, 3) ||
-            (suppress && (!dew || injuries == 0))) return false;
+        if (!Free || !Manual || foundation || qi < Bottleneck || dose < 0 || dose > Mathf.Min(Pills, 3) ||
+            (suppress && (!Dew || injuries == 0))) return false;
         if (pool == null || pool.Length != 5) pool = new int[5];
-        Array.Clear(pool, 0, pool.Length); single = singleRoot; pills -= dose; usedPills = dose; usedDew = suppress;
-        if (suppress) dew = false;
+        Array.Clear(pool, 0, pool.Length); single = singleRoot; usedPills = dose; usedDew = suppress;
+        Bag.TryRemove(FirstVolumeItems.FoundationPill, dose);
+        if (suppress) Bag.TryRemove(FirstVolumeItems.MeridianDew, 1);
         activeInjuries = suppress ? 0 : injuries; attempts++;
         firstFormed = 0; force = 0; turn = 1; pool[0] = 2 * dose;
         Intake(); note = "气海启关。丹力已化，守满七转方可落定。"; return true;
@@ -260,24 +328,27 @@ public sealed class DemoCultivation
     void Intake()
     {
         converted = false;
-        int primary = (turn - 1) % 5;
+        var roots = SpiritRoots.For(single);
         int count = Mathf.Max(1, 4 - activeInjuries);
         for (int i = 0; i < count; i++)
-            pool[single ? 0 : (primary + (i < 2 ? 0 : i - 1)) % 5]++;
+            pool[(int)roots.IntakeElement(turn, i)]++;
     }
 
     public bool ConvertTo(int element)
     {
-        if (!InTrial || !art || converted || element < 0 || element >= 5) return false;
+        if (!InTrial || !Art || converted || element < 0 || element >= 5) return false;
+        var spell = QingxiArts.ReturnFlow;
+        if (spell.Effect != QingxiSpellEffect.ConvertSpirit || spell.Target != FaShuTarget.Self) return false;
+        int amount = spell.ConversionAmount;
         int available = 0;
         for (int i = 0; i < 5; i++) if (i != element) available += pool[i];
-        if (available < 2) return false;
-        for (int i = 1, moved = 0; i <= 4 && moved < 2; i++)
+        if (amount <= 0 || available < amount) return false;
+        for (int i = 1, moved = 0; i <= 4 && moved < amount; i++)
         {
             int donor = (element + i) % 5;
-            int use = Mathf.Min(2 - moved, pool[donor]); pool[donor] -= use; pool[element] += use; moved += use;
+            int use = Mathf.Min(amount - moved, pool[donor]); pool[donor] -= use; pool[element] += use; moved += use;
         }
-        converted = true; note = $"归流术导入两缕{Elements[element]}气。这一转还可凝基。"; return true;
+        converted = true; note = $"{spell.Name}导入 {amount} 缕{Elements[element]}气。这一转还可凝基。"; return true;
     }
 
     public bool Condense(int element, bool deep)

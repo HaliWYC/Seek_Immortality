@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d765feeffdf47c4af6ec2149dedd85a, type: 3}
+  m_Name: EmberManual
+  m_EditorClassIdentifier:
+  id: manual.ember
+  displayName: 赤炉诀
+  description: 丹田如炉。斗法每次行动依根引气后，另生两缕离火。术法附着的灼烧每次发作多造成一点伤害。
+  source: 栖霞山门 · 向知客借卷
+  rarity: 1
+  miniRarity: 0
+  shuXing: 2
+  gongFaType: 0
+  jingjie: 1
+  miniJingjie: 4
+  qiPerSeason: 3
+  extraRootDraws: 0
+  bonusElement: 3
+  bonusAmount: 2
+  burnBonus: 1

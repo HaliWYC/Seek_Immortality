@@ -100,6 +100,7 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   location: {fileID: 114004}
+  controls: {fileID: 114005}
   discovery: {fileID: 100007}
 --- !u!1 &100002
 GameObject:

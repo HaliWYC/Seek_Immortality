@@ -11,8 +11,14 @@ public static class FirstVolumeBuild
     {
         HerbalStudyChecks.Run();
         FieldEncounterChecks.Run();
+        TacticalGroundAuthoring.Validate();
         TravelRouteChecks.Run();
         DemoCultivationChecks.Run();
+        RealmFrameworkChecks.Run();
+        CultivatorBagChecks.Run();
+        QingxiArtChecks.Run();
+        GateLoadoutChecks.Run();
+        SparInitiativeChecks.Run();
         Debug.Log("青岚山境第一卷规则检查通过。");
     }
 
@@ -21,7 +27,8 @@ public static class FirstVolumeBuild
     {
         Check();
         string path = Environment.GetEnvironmentVariable("QINGLAN_DEMO_OUTPUT");
-        if (string.IsNullOrEmpty(path)) path = Path.GetFullPath("Builds/QinglanDemo.app");
+        if (string.IsNullOrEmpty(path)) path = Path.GetFullPath("Builds/QinglanRoamingBattle/QinglanDemo.app");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
             scenes = new[] { "Assets/Qingxi/Scenes/QingxiTrail.unity", "Assets/Scenes/SampleScene.unity" },

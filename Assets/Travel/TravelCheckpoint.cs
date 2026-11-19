@@ -34,7 +34,7 @@ public sealed partial class TravelModel
         if (saved == null || saved.version != 1 || !Enum.IsDefined(typeof(MapPlace), saved.place)
             || !InBounds(saved.position) || !InBounds(saved.entrance)
             || !(saved.minutes >= 0) || double.IsInfinity(saved.minutes)
-            || !(saved.mana >= 0 && saved.mana <= 100)) return false;
+            || !(saved.mana >= 0) || float.IsInfinity(saved.mana)) return false;
         bool flying = saved.flying && saved.place == MapPlace.World && saved.mana > 0;
         if (!Walkable(saved.place, saved.position) &&
             !(flying && Walkable(MapPlace.World, saved.launch) && Walkable(MapPlace.World, saved.landing))) return false;
@@ -45,7 +45,7 @@ public sealed partial class TravelModel
         ridgeLaunch = saved.launch;
         ridgeLanding = saved.landing;
         Minutes = saved.minutes;
-        Mana = saved.mana;
+        SetMana(saved.mana);
         Flying = flying;
         overRidge = flying && !Walkable(Place, Position);
         departed = Math.Min(Minutes, Math.Max(0d, saved.departure));

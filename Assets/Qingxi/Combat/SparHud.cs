@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-[DisallowMultipleComponent]
-public sealed class SparHud : MonoBehaviour
+[DisallowMultipleComponent, DefaultExecutionOrder(50)]
+public sealed partial class SparHud : MonoBehaviour
 {
     [SerializeField] RectTransform topBar;
     [SerializeField] RectTransform bottomBar;
@@ -23,16 +23,21 @@ public sealed class SparHud : MonoBehaviour
     QingxiSparring controller;
     float noticeUntil;
     Button fieldOffer, fieldHerb;
-    Text fieldHerbLabel;
 
     void Awake()
     {
         primary.onClick.AddListener(PrimaryAction);
         secondary.onClick.AddListener(SecondaryAction);
+        // The board owns Enter/Space. A pointer-selected button must not also receive that submit.
+        primary.navigation = secondary.navigation = new Navigation { mode = Navigation.Mode.None };
         nearbyButton.onClick.AddListener(StartChallenge);
         fieldOffer = CopyButton(nearbyButton, new Vector2(0, 50), "G   松林护药", () => controller?.OpenFieldOffer());
         fieldHerb = CopyButton(primary, new Vector2(0, -48), "止血散  Q", () => controller?.UseFieldHerb());
-        fieldHerbLabel = fieldHerb.GetComponentInChildren<Text>(true);
+        CreateHeadLayer();
+        CreateInitiativePanel();
+        CreateArtsBar();
+        CreateJournal();
+        CreateBattleFrost();
         HideBattle();
     }
 
@@ -48,7 +53,11 @@ public sealed class SparHud : MonoBehaviour
         return button;
     }
 
-    public void Bind(QingxiSparring sparring) => controller = sparring;
+    public void Bind(QingxiSparring sparring)
+    {
+        controller = sparring;
+        sparring.Board.BindCombatEffects(GetComponent<Canvas>(), commands.font, topBar, bottomBar);
+    }
 
     void StartChallenge()
     {
@@ -57,15 +66,15 @@ public sealed class SparHud : MonoBehaviour
 
     void PrimaryAction()
     {
-        if (controller == null || !controller.InMatch) return;
-        if (controller.Finished) controller.LeaveSpar();
+        if (controller == null || !controller.InMatch || JournalOpen || controller.OrderInputThisFrame) return;
+        if (controller.CanLeaveSpar) controller.LeaveSpar();
         else if (controller.ConfirmingYield) controller.ConfirmYield();
-        else controller.FinishTurn();
+        else controller.ConfirmOrEndTurn();
     }
 
     void SecondaryAction()
     {
-        if (controller != null) controller.ToggleYield();
+        if (controller != null) controller.CancelOrYield();
     }
 
     public void SetNearby(bool value)
@@ -90,29 +99,47 @@ public sealed class SparHud : MonoBehaviour
         notice.gameObject.SetActive(false);
 
         var match = sparring.Match;
+        BindJournal(match);
         var unit = sparring.Selected;
         var target = match.At(sparring.Cursor);
         string stage;
         switch (match.Status)
         {
-            case SparStatus.PlayerTurn: stage = "我方行动"; break;
-            case SparStatus.OpponentTurn: stage = "对方行动"; break;
+            case SparStatus.PlayerTurn: stage = sparring.ChargingInitiative ? "蓄势中" : "可指挥"; break;
+            case SparStatus.OpponentTurn: stage = sparring.ChargingInitiative ? "蓄势中" : match.ActiveUnit.Friendly ? "友军行动" : "敌手行动"; break;
             case SparStatus.Won: stage = "我方获胜"; break;
             case SparStatus.Lost: stage = "对方获胜"; break;
             default: stage = "我方认输"; break;
         }
-        place.text = match.RescueRounds > 0 ? $"阿荇重伤  ·  可救援 {match.RescueRounds} 回合" : sparring.BattlePlace;
+        place.text = match.RescueRounds > 0 ? $"阿荇重伤  ·  你还有 {match.RescueRounds} 次本人行动可救援" : sparring.BattlePlace;
         if (match.InField && match.Status == SparStatus.Yielded) stage = "撤出山林";
-        phase.text = $"第 {match.Round} 回合  /  {stage}";
-        participant.text = unit == null ? "当前无人行动" :
-            $"{unit.Name}    气力 {unit.Hp}/{unit.MaxHp}    移步 {(unit.Moved ? "已用" : unit.Steps.ToString())}    施术 {(unit.Acted ? "已用" : $"射程 {unit.Range}")}";
+        if (match.Party == FieldParty.Practice && !string.IsNullOrEmpty(sparring.CurrentLoadoutName))
+            place.text += "　·　" + sparring.CurrentLoadoutName;
+        if (sparring.PlayingAction)
+        {
+            switch (sparring.PlaybackPhase)
+            {
+                case BattlePlaybackPhase.Movement: stage = "行走中"; break;
+                case BattlePlaybackPhase.Windup: stage = "出招中"; break;
+                case BattlePlaybackPhase.Impact: stage = "结算中"; break;
+                case BattlePlaybackPhase.Closing: stage = "收势中"; break;
+                case BattlePlaybackPhase.Opening: stage = "行动前结算"; break;
+            }
+        }
+        BindInitiative(match, stage);
+        string manaLabel = match.InField ? "法力" : "切磋法力";
+        participant.text = unit == null ? "" : sparring.ChargingInitiative ?
+            $"正在蓄势　·　{unit.Name}将在 {match.CombatTime:0.#} 息出手" :
+            $"{unit.Name}　行动力 {unit.ActionPoints}/{unit.MaxActionPoints}　{manaLabel} {TravelModel.DisplayMana(unit.Mana)}/{unit.MaxMana}　可走 {unit.MovementLeft} 格";
         cursorInfo.text = target != null && !target.Friendly
-            ? $"{target.Name}   气力 {target.Hp}/{target.MaxHp}   射程 {target.Range}" : "";
+            ? $"{target.Name}　气血 {target.Hp}/{target.MaxHp}　射程 {target.Range}" : "";
 
-        primary.interactable = match.Status == SparStatus.PlayerTurn || sparring.Finished || sparring.ConfirmingYield;
+        primary.interactable = sparring.AwaitingPlayer || sparring.CanLeaveSpar || sparring.ConfirmingYield;
         fieldHerb.gameObject.SetActive(match.Party == FieldParty.Contract && !sparring.Finished &&
             !sparring.ConfirmingYield && match.CanCommand(unit) && unit == match.Companion && !match.BandageUsed);
-        fieldHerb.interactable = unit != null && !unit.Acted && unit.Hp < unit.MaxHp;
+        fieldHerb.interactable = sparring.AwaitingPlayer && match.CanUseAgreedHerb(unit);
+        ShowArts(sparring);
+        BindHeads(match);
         secondary.gameObject.SetActive(!sparring.Finished);
         if (sparring.Finished)
         {
@@ -132,42 +159,53 @@ public sealed class SparHud : MonoBehaviour
         }
         else
         {
-            primaryLabel.text = "结束回合";
+            primaryLabel.text = sparring.PlayingAction ? stage : "结束回合";
             secondaryLabel.text = match.InField ? "撤离  Esc" : "认输";
             feedbackLine.text = string.IsNullOrEmpty(feedback) ? match.Message : feedback;
             commands.text = match.RescueRounds > 0 ? "你或木傀与阿荇相邻后选撤离，可舍弃兽蜕带他回去。" :
                 match.CompanionDied ? "阿荇已身亡。可选择撤离或继续驱兽。" :
-                "点格行棋   /   Tab  换人   ·   方向键  选格   ·   空格  行动   ·   Enter  结束回合";
+                "点格预览，再点确认　·　方向键选格　·　空格行动　·　Enter 收势　·　Tab 查看下位";
         }
-        fieldHerbLabel.text = match.Party == FieldParty.Brigands ? "祭符  Q" : "止血散  Q";
         if (match.Party == FieldParty.Brigands)
         {
-            fieldHerb.gameObject.SetActive(!sparring.Finished && !sparring.ConfirmingYield &&
-                match.WardReady && match.CanCommand(unit) && unit == match.Units[0] && match.Units[2].Alive);
-            fieldHerb.interactable = unit != null && !unit.Acted;
             if (sparring.Finished) commands.text = BrigandTerms.Load().result;
             else if (sparring.ConfirmingYield)
                 feedbackLine.text = "舍去至多两枚灵石，绕行一日脱身？";
-            else commands.text = match.WardReady ? "本人施术前按 Q 祭符   ·   Esc 弃财脱身   ·   气力耗尽则身亡" :
-                match.FormationBroken ? "护身阵已破   ·   Esc 弃财脱身   ·   气力耗尽则身亡" :
-                "灰衣客护阵每击抵三点   ·   Esc 弃财脱身   ·   气力耗尽则身亡";
+            else commands.text = match.WardReady ? "从携带槽祭破阵符   ·   Esc 弃财脱身   ·   气血耗尽则身亡" :
+                match.FormationBroken ? "护身阵已破   ·   Esc 弃财脱身   ·   气血耗尽则身亡" :
+                "灰衣客护阵每击抵三点   ·   Esc 弃财脱身   ·   气血耗尽则身亡";
         }
+        if (sparring.HasOrder && !sparring.Finished && !sparring.ConfirmingYield)
+        {
+            primaryLabel.text = "确认行动";
+            secondaryLabel.text = "取消  Esc";
+            feedbackLine.text = sparring.OrderDescription;
+            commands.text = "再点目标、按空格或 Enter 确认　　改点另选　　Esc 或右键取消";
+        }
+        if (sparring.Finished && match.InField && !DemoRun.Slain)
+        {
+            var hero = match.Units[0];
+            commands.text += $"　·　返回时保留法力 {TravelModel.DisplayMana(hero.Mana)}/{hero.MaxMana}";
+        }
+        LayoutActionDock(sparring);
     }
 
     public void HideBattle()
     {
+        HideJournal();
+        HideBattleFrost();
         topBar.gameObject.SetActive(false);
         bottomBar.gameObject.SetActive(false);
         nearbyButton.gameObject.SetActive(false);
         fieldOffer.gameObject.SetActive(false);
         fieldHerb.gameObject.SetActive(false);
+        headLayer.gameObject.SetActive(false);
         notice.gameObject.SetActive(false);
     }
 
     public bool CoversBoard(Vector2 pointerScreen) =>
-        topBar.gameObject.activeSelf &&
-        (RectTransformUtility.RectangleContainsScreenPoint(topBar, pointerScreen) ||
-         RectTransformUtility.RectangleContainsScreenPoint(bottomBar, pointerScreen));
+        JournalOpen || (topBar.gameObject.activeSelf &&
+        (CoversTopControls(pointerScreen) || CoversActionDock(pointerScreen) || CoversStatusPointer(pointerScreen)));
 
     public void Explain(string message)
     {

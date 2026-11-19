@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40a54fba6e7249a9a3cf37f1b8428a67, type: 3}
+  m_Name: ReturnFlow
+  m_EditorClassIdentifier:
+  id: spell.return-flow
+  displayName: 五行归流术
+  description: 冲关可将两缕异气转入指定五行，每转一次，仍可凝基。
+  source: 栖霞山门 · 向知客求授，履约者可减免束脩
+  rarity: 1
+  miniRarity: 0
+  shuXing: 12
+  faShuType: 0
+  sourceType: 0
+  target: 0
+  duration: 0
+  level: 1
+  proficiency: 0
+  effect: 1
+  range: 0
+  extraPower: 0
+  cooldownTurns: 0
+  conversionAmount: 2
+  trainingDays: 0
+  fixedCosts: []
+  sameCost: 0
+  effectAmount: 0

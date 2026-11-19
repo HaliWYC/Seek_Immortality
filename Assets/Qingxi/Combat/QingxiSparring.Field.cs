@@ -48,20 +48,6 @@ public sealed partial class QingxiSparring
         else if (keys.digit3Key.wasPressedThisFrame || keys.numpad3Key.wasPressedThisFrame) AcceptField(FieldParty.Solo);
     }
 
-    public void UseFieldHerb()
-    {
-        if (!InMatch || confirmingYield) return;
-        if (Match.Party == FieldParty.Brigands)
-        {
-            feedback = Match.UseFieldWard(selected) ? "" : "破阵符需由你在本回合用一次施术机会祭出。";
-            Refresh();
-            return;
-        }
-        if (Match.Party != FieldParty.Contract) return;
-        feedback = Match.UseAgreedHerb(selected) ? "" : "止血散只可由负伤的阿荇用一次，消耗他的施术机会。";
-        Refresh();
-    }
-
     public static int FieldPay(SparMatch fight)
     {
         if (!fight.InField || fight.Status != SparStatus.Won) return 0;
@@ -98,7 +84,7 @@ public sealed partial class QingxiSparring
 
     void OnGUI()
     {
-        if (!InEncounterOffer || DemoRun.Modal) return;
+        if ((!InEncounterOffer && !PracticeMenuOpen) || DemoRun.Modal) return;
         if (fieldTitle == null)
         {
             fieldFont = Resources.Load<Font>("NotoSansSC-Regular");
@@ -112,6 +98,13 @@ public sealed partial class QingxiSparring
         GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 850f * scale) * 0.5f,
             (Screen.height - 550f * scale) * 0.5f), Quaternion.identity, new Vector3(scale, scale, 1));
         GUI.color = new Color32(29, 49, 43, 250);
+        if (PracticeMenuOpen)
+        {
+            DrawPracticeMenu();
+            GUI.color = oldColor;
+            GUI.matrix = old;
+            return;
+        }
         if (brigandTerms != null)
         {
             DrawBrigandOffer();
@@ -130,11 +123,12 @@ public sealed partial class QingxiSparring
         GUI.Label(new Rect(68, 147, 710, 72), detail, fieldBody);
         if (!resolved)
         {
-            GUI.Label(new Rect(68, 221, 714, 60), "此行有性命之忧。阿荇倒地可撑两个我方回合。你或木傀可在相邻格带他撤走，兽蜕留在林中。", fieldBody);
+            GUI.Label(new Rect(68, 221, 714, 60), "此行有性命之忧。阿荇倒地后，你有两次本人行动可救他。你或木傀站在相邻格便能带他撤走，兽蜕留在林中。", fieldBody);
             DrawFieldChoice(290, "1　结伴同行　·　阿荇自行行动，保命符由他掌握", FieldParty.Ally);
             DrawFieldChoice(342, "2　订临时指挥契　·　可指挥他并用一包止血散，保命符自留", FieldParty.Contract);
             DrawFieldChoice(394, "3　让他退到官道　·　只带自己的木傀进林", FieldParty.Solo);
-            GUI.Label(new Rect(68, 449, 716, 36), "此地仅有一单。可以稍后再来，开战后撤离也会结案。", fieldBody);
+            GUI.Label(new Rect(68, 449, 716, 36),
+                $"进阵法力 {TravelModel.DisplayMana(DemoRun.Mana)}/{DemoRun.ManaCapacity}。撤离也会结案，可稍后再来。", fieldBody);
         }
         GUI.color = oldColor;
         GUI.matrix = old;

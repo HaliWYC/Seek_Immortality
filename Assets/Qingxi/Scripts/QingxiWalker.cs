@@ -46,7 +46,17 @@ public sealed class QingxiWalker : MonoBehaviour
         if (!CanUseExplorationInput) { input = Vector2.zero; return; }
         var keys = Keyboard.current;
         if (keys == null) { input = Vector2.zero; return; }
-        if (keys.rKey.wasPressedThisFrame) { RestartWalk(); return; }
+        if (keys.rKey.wasPressedThisFrame)
+        {
+            input = Vector2.zero;
+            if (!DemoRun.Active) RestartWalk();
+            else
+            {
+                string notice = DemoRun.RestInQingxi();
+                if (notice.Length > 0) FindAnyObjectByType<SparHud>()?.Explain(notice);
+            }
+            return;
+        }
 
         float x = (keys.dKey.isPressed || keys.rightArrowKey.isPressed ? 1 : 0)
                 - (keys.aKey.isPressed || keys.leftArrowKey.isPressed ? 1 : 0);

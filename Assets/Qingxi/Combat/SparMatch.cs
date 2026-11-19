@@ -5,6 +5,20 @@ using UnityEngine;
 public enum SparStatus { PlayerTurn, OpponentTurn, Won, Lost, Yielded }
 public enum FieldParty { Practice, Solo, Ally, Contract, Brigands }
 
+public readonly struct SparHealthChange
+{
+    public SparUnit Target { get; }
+    public int Amount { get; }
+    public QingxiSpellDefinition Spell { get; }
+
+    internal SparHealthChange(SparUnit target, int amount, QingxiSpellDefinition spell)
+    {
+        Target = target;
+        Amount = amount;
+        Spell = spell;
+    }
+}
+
 public sealed class SparUnit
 {
     public string Name { get; }
@@ -14,14 +28,24 @@ public sealed class SparUnit
     public IReadOnlyList<Vector2Int> WalkPath { get; internal set; }
     public int Hp { get; internal set; }
     public int MaxHp { get; }
+    public float Mana { get; internal set; }
+    public int MaxMana { get; }
     public int Range { get; }
     public int Power { get; }
     public int Steps { get; }
-    public bool Moved { get; internal set; }
+    public int Reaction { get; }
+    public int TurnsStarted { get; internal set; }
+    public int MaxActionPoints => Steps + 3;
+    public int ActionPoints { get; internal set; }
+    internal int StepsTaken { get; set; }
+    internal int MovementPenalty { get; set; }
+    public int MovementLeft => Math.Min(ActionPoints, Math.Max(0, MaxActionPoints - MovementPenalty - StepsTaken));
+    public bool Moved => StepsTaken > 0;
     public bool Acted { get; internal set; }
     public bool Alive => Hp > 0;
 
-    internal SparUnit(string name, bool friendly, Vector2Int cell, int hp, int range, int power, int steps, bool direct = true)
+    internal SparUnit(string name, bool friendly, Vector2Int cell, int hp, int range, int power, int steps,
+        bool direct = true, int reaction = 10, int mana = 12, float? startingMana = null)
     {
         Name = name;
         Friendly = friendly;
@@ -29,16 +53,23 @@ public sealed class SparUnit
         Cell = cell;
         WalkPath = Array.AsReadOnly(new[] { cell });
         MaxHp = Hp = hp;
+        MaxMana = mana;
+        Mana = Mathf.Clamp(startingMana ?? mana, 0f, mana);
         Range = range;
         Power = power;
         Steps = steps;
+        ActionPoints = MaxActionPoints;
+        if (reaction < 1) throw new ArgumentOutOfRangeException(nameof(reaction));
+        Reaction = reaction;
     }
 }
 
-public sealed class SparMatch
+public sealed partial class SparMatch
 {
     public const int Width = 8;
     public const int Height = 6;
+    public const int StrikeCost = 2;
+    public const int ItemCost = 2;
 
     static readonly Vector2Int[] directions =
         { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
@@ -52,13 +83,13 @@ public sealed class SparMatch
 
     // Board queries and the opposing side share the same paths until occupancy changes.
     readonly Dictionary<SparUnit, PathMap> paths = new Dictionary<SparUnit, PathMap>();
-    int nextOpponentIndex;
+    readonly List<SparHealthChange> healthChanges = new List<SparHealthChange>(2);
 
     public int Columns => terrain.GetLength(0);
     public int Rows => terrain.GetLength(1);
     public IReadOnlyList<SparUnit> Units { get; }
+    public IReadOnlyList<SparHealthChange> LastHealthChanges { get; }
     public SparStatus Status { get; private set; } = SparStatus.PlayerTurn;
-    public int Round { get; private set; } = 1;
     public string Message { get; private set; } = "切磋开始，双方点到为止。";
     public FieldParty Party { get; }
     public bool InField => Party != FieldParty.Practice;
@@ -72,9 +103,8 @@ public sealed class SparMatch
     bool stunned;
     public bool CompanionDied { get; private set; }
     public bool CompanionCarried { get; private set; }
-    int lastRescueRound;
-    public int RescueRounds => lastRescueRound == 0 || CompanionDied || CompanionCarried ? 0 :
-        Math.Max(0, Math.Min(2, lastRescueRound - Round + 1));
+    int rescueTurns;
+    public int RescueRounds => CompanionDied || CompanionCarried ? 0 : rescueTurns;
 
     public SparMatch() : this(ExampleTerrain(), exampleDeployment) { }
 
@@ -83,7 +113,9 @@ public sealed class SparMatch
     public SparMatch(bool[,] blocked, IReadOnlyList<Vector2Int> deployment,
         Func<Vector2Int, Vector2Int, bool> canTraverse = null,
         Func<Vector2Int, Vector2Int, bool> clearShot = null, FieldParty party = FieldParty.Practice,
-        string name = "药铺学徒", int cultivationBonus = 0, bool preparedWard = false, bool studiedWard = false)
+        string name = "药铺学徒", int cultivationBonus = 0, bool preparedWard = false, bool studiedWard = false,
+        CultivatorAttributes? heroAttributes = null, float? heroMana = null,
+        int practiceGearAttack = 0, int practiceGearHealth = 0)
     {
         if (blocked == null) throw new ArgumentNullException(nameof(blocked));
         if (deployment == null) throw new ArgumentNullException(nameof(deployment));
@@ -101,14 +133,15 @@ public sealed class SparMatch
         Party = party;
         WardReady = preparedWard;
         WardStudied = studiedWard;
+        int fieldMana = heroAttributes?.ManaCapacity ?? 12;
         if (party == FieldParty.Practice)
         {
             units = new[]
             {
-                new SparUnit("药铺学徒", true, deployment[0], 12, 3, 4, 3),
-                new SparUnit("练习傀儡", true, deployment[1], 14, 1, 3, 3),
-                new SparUnit("巡山弟子", false, deployment[2], 9, 2, 3, 2),
-                new SparUnit("护阵弟子", false, deployment[3], 11, 1, 4, 3)
+                new SparUnit("药铺学徒", true, deployment[0], 12 + practiceGearHealth, 3, 4 + practiceGearAttack, 3, reaction: 12),
+                new SparUnit("练习傀儡", true, deployment[1], 14, 1, 3, 3, reaction: 9),
+                new SparUnit("巡山弟子", false, deployment[2], 9, 2, 3, 2, reaction: 11),
+                new SparUnit("护阵弟子", false, deployment[3], 11, 1, 4, 3, reaction: 10)
             };
         }
         else if (party == FieldParty.Brigands)
@@ -116,10 +149,12 @@ public sealed class SparMatch
             int rank = Mathf.Clamp(cultivationBonus, 0, 4);
             units = new[]
             {
-                new SparUnit(name, true, deployment[0], 12 + 3 * rank, 3, 3 + rank, 3),
-                new SparUnit("护行木傀", true, deployment[1], 13, 1, 3, 3),
-                new SparUnit("灰衣客 · 筑基初期", false, deployment[2], 31, 3, 8, 3),
-                new SparUnit("望风同伙", false, deployment[3], 8, 2, 3, 2)
+                new SparUnit(name, true, deployment[0], heroAttributes?.MaxHealth ?? 12 + 3 * rank, 3,
+                    heroAttributes?.Attack ?? 3 + rank, heroAttributes?.Movement ?? 3,
+                    reaction: heroAttributes?.Reaction ?? 13, mana: fieldMana, startingMana: heroMana),
+                new SparUnit("护行木傀", true, deployment[1], 13, 1, 3, 3, reaction: 9),
+                new SparUnit("灰衣客 · 筑基初期", false, deployment[2], 31, 3, 8, 3, reaction: 16),
+                new SparUnit("望风同伙", false, deployment[3], 8, 2, 3, 2, reaction: 11)
             };
             Message = "灰衣客祭起护身阵。你可随时弃财脱身。";
         }
@@ -128,16 +163,22 @@ public sealed class SparMatch
             int bonus = Mathf.Clamp(cultivationBonus, 0, 3);
             var partyUnits = new List<SparUnit>
             {
-                new SparUnit(name, true, deployment[0], 12 + bonus * 2, 3, 4 + bonus, 3),
-                new SparUnit("护行木傀", true, deployment[1], 13, 1, 3, 3),
-                new SparUnit("青棘獾", false, deployment[2], 23, 2, 5, 3)
+                new SparUnit(name, true, deployment[0], heroAttributes?.MaxHealth ?? 12 + bonus * 2, 3,
+                    heroAttributes?.Attack ?? 4 + bonus, heroAttributes?.Movement ?? 3,
+                    reaction: heroAttributes?.Reaction ?? 13, mana: fieldMana, startingMana: heroMana),
+                new SparUnit("护行木傀", true, deployment[1], 13, 1, 3, 3, reaction: 9),
+                new SparUnit("青棘獾", false, deployment[2], 23, 2, 5, 3, reaction: 10)
             };
             if (party != FieldParty.Solo)
-                partyUnits.Add(new SparUnit("采药客阿荇", true, deployment[3], 7, 2, 3, 3, party == FieldParty.Contract));
+                partyUnits.Add(new SparUnit("采药客阿荇", true, deployment[3], 7, 2, 3, 3, party == FieldParty.Contract, reaction: 11));
             units = partyUnits.ToArray();
             Message = "青棘獾逼近。可驱退妖兽收取兽蜕，也可放弃兽蜕撤走。";
         }
         Units = Array.AsReadOnly(units);
+        LastHealthChanges = healthChanges.AsReadOnly();
+        LastStatusEvents = statusEvents.AsReadOnly();
+        Journal = journal.AsReadOnly();
+        AdvanceInitiative();
     }
 
     static bool[,] ExampleTerrain()
@@ -158,25 +199,50 @@ public sealed class SparMatch
         cell.x < 0 || cell.x >= Columns || cell.y < 0 || cell.y >= Rows || terrain[cell.x, cell.y];
 
     public bool CanCommand(SparUnit unit) =>
-        Status == SparStatus.PlayerTurn && unit != null && unit.Direct && unit.Alive &&
-        Array.IndexOf(units, unit) >= 0;
+        Status == SparStatus.PlayerTurn && ActorReady && unit == ActiveUnit && unit.Direct;
 
     public bool CanMove(SparUnit unit, Vector2Int cell)
     {
-        if (!CanCommand(unit) || unit.Moved || IsBlocked(cell) || At(cell) != null) return false;
-        return PathsFrom(unit).Cost(cell) <= unit.Steps;
+        if (!CanCommand(unit) || unit.MovementLeft <= 0 || IsBlocked(cell) || At(cell) != null) return false;
+        return PathsFrom(unit).Cost(cell) <= unit.MovementLeft;
+    }
+
+    public IReadOnlyList<Vector2Int> PreviewPath(SparUnit unit, Vector2Int cell) =>
+        CanMove(unit, cell) ? BuildPath(unit, cell) : Array.Empty<Vector2Int>();
+
+    internal IEnumerable<Vector2Int> MovesInRange(SparUnit unit)
+    {
+        if (!CanCommand(unit) || unit.MovementLeft <= 0) yield break;
+        var paths = PathsFrom(unit);
+        // The breadth-first queue is already sorted by the walking cost.
+        for (int i = 1; i < paths.Reachable.Count; i++)
+        {
+            var cell = paths.Reachable[i];
+            if (paths.Cost(cell) > unit.MovementLeft) yield break;
+            yield return cell;
+        }
     }
 
     public bool HasLineOfSight(Vector2Int a, Vector2Int b) => clearShot == null || clearShot(a, b);
 
+    QingxiSpellDefinition SelectedSpellFor(SparUnit unit) => unit == units[0] ? selectedSpell : null;
+
+    public int AttackRange(SparUnit unit) => SelectedSpellFor(unit)?.Range ?? unit.Range;
+    public int CurrentAttackActionCost(SparUnit unit) => SelectedSpellFor(unit)?.ActionPointCost ?? StrikeCost;
+
     bool CanHitFrom(Vector2Int from, SparUnit target, int range) =>
         Distance(from, target.Cell) <= range && HasLineOfSight(from, target.Cell);
 
+    bool CanStrikeFrom(SparUnit unit, Vector2Int from, SparUnit target) =>
+        unit.ActionPoints >= StrikeCost && target != null && target.Alive && target.Friendly != unit.Friendly &&
+        CanHitFrom(from, target, unit.Range);
+
     public bool CanAttack(SparUnit unit, Vector2Int cell)
     {
-        if (!CanCommand(unit) || unit.Acted) return false;
+        if (!CanCommand(unit)) return false;
         var target = At(cell);
-        return target != null && !target.Friendly && CanHitFrom(unit.Cell, target, unit.Range);
+        var spell = SelectedSpellFor(unit);
+        return spell == null ? CanStrikeFrom(unit, unit.Cell, target) : CanCastFrom(unit, unit.Cell, target, spell, paymentElement);
     }
 
     public bool Move(SparUnit unit, Vector2Int cell)
@@ -189,38 +255,59 @@ public sealed class SparMatch
 
     public bool Attack(SparUnit unit, Vector2Int cell)
     {
-        if (!CanAttack(unit, cell)) return false;
-        Cast(unit, At(cell));
+        if (!CanCommand(unit)) return false;
+        var target = At(cell);
+        var spell = SelectedSpellFor(unit);
+        if (spell != null)
+        {
+            if (!TryCastDuringTurn(unit, target, spell, paymentElement)) return false;
+        }
+        else
+        {
+            if (!CanStrikeFrom(unit, unit.Cell, target)) return false;
+            Cast(unit, target);
+        }
+        selectedSpell = null;
         return true;
     }
+
+    public bool CanUseAgreedHerb(SparUnit unit) => Party == FieldParty.Contract && unit == Companion && CanCommand(unit) &&
+        unit.ActionPoints >= ItemCost && !BandageUsed && unit.Hp < unit.MaxHp;
 
     public bool UseAgreedHerb(SparUnit unit)
     {
-        if (Party != FieldParty.Contract || unit != Companion || !CanCommand(unit) ||
-            unit.Acted || BandageUsed || unit.Hp >= unit.MaxHp) return false;
-        unit.Hp = Math.Min(unit.MaxHp, unit.Hp + 4);
+        if (!CanUseAgreedHerb(unit)) return false;
+        ClearActionResults();
+        Heal(unit, 4);
+        unit.ActionPoints -= ItemCost;
         unit.Acted = true;
         BandageUsed = true;
-        Message = "依约用了止血散，阿荇气力恢复。";
+        Message = "依约用了止血散，阿荇气血恢复。";
+        RecordJournalAction("止血散", unit);
         return true;
     }
 
-    public bool UseFieldWard(SparUnit unit)
+    public bool CanUseFieldWard(SparUnit unit) => Party == FieldParty.Brigands && WardReady && unit == units[0] &&
+        CanCommand(unit) && unit.ActionPoints >= ItemCost && units[2].Alive;
+
+    public bool UseFieldWard(SparUnit unit) => !HasCarriedSlots && ApplyFieldWard(unit);
+
+    bool ApplyFieldWard(SparUnit unit)
     {
-        if (Party != FieldParty.Brigands || !WardReady || unit != units[0] || !CanCommand(unit) || unit.Acted || !units[2].Alive)
-            return false;
+        if (!CanUseFieldWard(unit)) return false;
         WardReady = false;
         WardReleased = true;
+        selectedSpell = null;
         FormationBroken = WardStudied;
         stunned = WardStudied;
-        Cast(unit, units[2], WardStudied ? 13 : 6);
+        Cast(unit, units[2], WardStudied ? 13 : 6, actionCost: ItemCost, actionName: "破阵符");
         if (Status == SparStatus.PlayerTurn)
             Message = WardStudied ? "阵符击中右袖的阵眼，护身阵破去，灰衣客下一次出手受阻。" :
-                "阵符惊动护阵，灰衣客损失六点气力，阵眼仍在。";
+                "阵符惊动护阵，灰衣客损失六点气血，阵眼仍在。";
         return true;
     }
 
-    void Relocate(SparUnit unit, Vector2Int cell)
+    IReadOnlyList<Vector2Int> BuildPath(SparUnit unit, Vector2Int cell)
     {
         var map = PathsFrom(unit);
         var route = new Vector2Int[map.Cost(cell) + 1];
@@ -230,35 +317,90 @@ public sealed class SparMatch
             Vector2Int step = route[i];
             route[i - 1] = map.Previous[step.x, step.y];
         }
-        unit.WalkPath = Array.AsReadOnly(route);
-        unit.Cell = cell;
-        unit.Moved = true;
-        paths.Clear();
+        return Array.AsReadOnly(route);
     }
 
-    void Cast(SparUnit caster, SparUnit target, int fixedPower = 0)
+    void Relocate(SparUnit unit, Vector2Int cell)
+    {
+        ClearActionResults();
+        unit.WalkPath = BuildPath(unit, cell);
+        int steps = unit.WalkPath.Count - 1;
+        unit.ActionPoints -= steps;
+        unit.StepsTaken += steps;
+        unit.Cell = cell;
+        paths.Clear();
+        RecordJournalMove(steps);
+    }
+
+    public int PreviewAttackDamage(SparUnit unit, Vector2Int cell)
+    {
+        if (!CanAttack(unit, cell)) return 0;
+        var spell = SelectedSpellFor(unit);
+        return spell != null && spell.Target == FaShuTarget.Self ? 0 : HitPoints(unit, At(cell), spell, paymentElement);
+    }
+
+    public int PreviewAttackBlock(SparUnit unit, Vector2Int cell)
+    {
+        if (!CanAttack(unit, cell)) return 0;
+        var spell = SelectedSpellFor(unit);
+        if (spell != null && spell.Target == FaShuTarget.Self) return 0;
+        var target = At(cell);
+        return Math.Min(AttackPower(unit, target, 0, spell, paymentElement), WardStatusFor(target).Amount);
+    }
+
+    int AttackPower(SparUnit caster, SparUnit target, int fixedPower, QingxiSpellDefinition spell, WuXing payment)
     {
         bool protectedBoss = Party == FieldParty.Brigands && target == units[2] && !FormationBroken;
-        int power = fixedPower > 0 ? fixedPower : Math.Max(1, caster.Power - (protectedBoss ? 3 : 0));
-        int hit = Math.Min(target.Hp, power);
-        target.Hp -= hit;
-        caster.Acted = true;
-        Message = caster.Name + "命中" + target.Name + "，气力减少 " + hit + "。";
-        if (target.Alive) return;
+        int bonus = spell == null ? 0 : spell.ExtraPower;
+        if (spell != null && spell.Effect == QingxiSpellEffect.Harmonize && spell.PaymentRelation(payment) < 0)
+            bonus += spell.EffectAmount;
+        return fixedPower > 0 ? fixedPower : Math.Max(1, caster.Power + bonus - (protectedBoss ? 3 : 0));
+    }
 
+    int HitPoints(SparUnit caster, SparUnit target, QingxiSpellDefinition spell, WuXing payment)
+    {
+        int power = AttackPower(caster, target, 0, spell, payment);
+        return Math.Min(target.Hp, Math.Max(0, power - WardStatusFor(target).Amount));
+    }
+
+    void Cast(SparUnit caster, SparUnit target, int fixedPower = 0, QingxiSpellDefinition spell = null,
+        int actionCost = StrikeCost, WuXing payment = default, string actionName = null)
+    {
+        ClearActionResults();
+        int power = AttackPower(caster, target, fixedPower, spell, payment);
+        int blocked = AbsorbHit(target, power);
+        int hit = Math.Min(target.Hp, power - blocked);
+        if (hit > 0)
+        {
+            target.Hp -= hit;
+            healthChanges.Add(new SparHealthChange(target, -hit, spell));
+        }
+        caster.ActionPoints -= actionCost;
+        caster.Acted = true;
+        Message = caster.Name + (spell != null ? "以" + spell.Name : "") + "命中" + target.Name + "。";
+        if (blocked > 0) Message += $"护体挡下 {blocked} 点伤害，";
+        Message += hit > 0 ? $"气血减少 {hit}。" : "气血无损。";
+        ApplyArtEffect(caster, target, spell, payment);
+        if (!target.Alive) ResolveDefeat(target);
+        RecordJournalAction(actionName ?? spell?.Name ?? "常击", target);
+    }
+
+    void ResolveDefeat(SparUnit target)
+    {
         paths.Clear();
+        forecastsDirty = true;
         if (target == Companion)
         {
             if (!TalismanUsed)
             {
                 TalismanUsed = true;
-                target.Hp = 3;
+                Heal(target, 3);
                 Message = "阿荇自行捏碎保命符，撑住了这一击。";
             }
             else
             {
-                lastRescueRound = Round + 2;
-                Message = "阿荇重伤倒地。两回合内可在相邻格带他撤走。";
+                rescueTurns = 2;
+                Message = "阿荇重伤倒地。你还有两次本人行动可以救他。";
             }
             return;
         }
@@ -280,62 +422,37 @@ public sealed class SparMatch
             Message = Party == FieldParty.Brigands ? "灰衣客与同伙败走，隘口重新有了通路。" :
                 "青棘獾退入深林，你收到了兽蜕。" + CompanionResult();
         }
-        else Message = target.Friendly ? "我方气力用尽，双方收势行礼。" : "对方收势认输，切磋取胜。";
+        else Message = target.Friendly ? "我方气血用尽，双方收势行礼。" : "对方收势认输，切磋取胜。";
+    }
+
+    int Heal(SparUnit target, int power, QingxiSpellDefinition spell = null)
+    {
+        int heal = Math.Min(target.MaxHp - target.Hp, power);
+        if (heal > 0)
+        {
+            target.Hp += heal;
+            healthChanges.Add(new SparHealthChange(target, heal, spell));
+        }
+        return heal;
     }
 
     public void EndTurn()
     {
-        if (Status != SparStatus.PlayerTurn) return;
-        if (RescueRounds == 1)
+        if (Status != SparStatus.PlayerTurn || !ActorReady) return;
+        selectedSpell = null;
+        if (ActiveUnit == units[0] && RescueRounds > 0 && --rescueTurns == 0)
         {
             CompanionDied = true;
             paths.Clear();
+            Message = "你收势时已错过最后的救援机会，阿荇伤重身亡。";
         }
-        if (Party == FieldParty.Ally && Companion.Alive)
-        {
-            PlayActor(Companion);
-            if (Status != SparStatus.PlayerTurn) return;
-        }
-        Status = SparStatus.OpponentTurn;
-        nextOpponentIndex = 0;
-        RefreshActions(false);
-        Message = Party == FieldParty.Brigands ? "劫修逼近。" : InField ? "妖兽正在行动。" : "轮到对方出招。";
-    }
-
-    public void StepOpponent()
-    {
-        if (Status != SparStatus.OpponentTurn) return;
-        var opponent = NextOpponent();
-        if (opponent != null)
-        {
-            if (Party == FieldParty.Brigands && opponent == units[2] && stunned)
-            {
-                stunned = false;
-                Message = "阵纹逆转，灰衣客这回合只能稳住气息。";
-            }
-            else PlayActor(opponent);
-            nextOpponentIndex++;
-        }
-        if (Status != SparStatus.OpponentTurn || NextOpponent() != null) return;
-        Round++;
-        Status = SparStatus.PlayerTurn;
-        RefreshActions(true);
-    }
-
-    SparUnit NextOpponent()
-    {
-        while (nextOpponentIndex < units.Length)
-        {
-            var unit = units[nextOpponentIndex];
-            if (!unit.Friendly && unit.Alive) return unit;
-            nextOpponentIndex++;
-        }
-        return null;
+        AdvanceInitiative();
     }
 
     public void Yield()
     {
         if (Status != SparStatus.PlayerTurn && Status != SparStatus.OpponentTurn) return;
+        OpeningPending = false;
         Status = SparStatus.Yielded;
         if (InField)
         {
@@ -363,51 +480,6 @@ public sealed class SparMatch
         if (CompanionDied) return "阿荇已身亡。";
         if (CompanionCarried) return "阿荇已获救。";
         return "阿荇平安同行。";
-    }
-
-    void RefreshActions(bool friendly)
-    {
-        foreach (var unit in units)
-        {
-            if (unit.Friendly != friendly) continue;
-            unit.Moved = false;
-            unit.Acted = false;
-        }
-    }
-
-    // Choose the closest legal firing position. Downed units no longer obstruct the board.
-    void PlayActor(SparUnit opponent)
-    {
-        var map = PathsFrom(opponent);
-        var firingCell = opponent.Cell;
-        int bestCost = int.MaxValue;
-        SparUnit target = null;
-        foreach (var candidate in units)
-        {
-            if (candidate.Friendly == opponent.Friendly || !candidate.Alive) continue;
-            foreach (var cell in map.Reachable)
-            {
-                if (!CanHitFrom(cell, candidate, opponent.Range)) continue;
-                int cost = map.Cost(cell);
-                if (cost > bestCost || (cost == bestCost && target != null && target.Hp <= candidate.Hp))
-                    continue;
-                bestCost = cost;
-                firingCell = cell;
-                target = candidate;
-            }
-        }
-
-        if (target == null)
-        {
-            Message = opponent.Name + "守在原地。";
-            return;
-        }
-        // Trace the route back to the last square within this turn's walking allowance.
-        while (map.Cost(firingCell) > opponent.Steps)
-            firingCell = map.Previous[firingCell.x, firingCell.y];
-        if (firingCell != opponent.Cell) Relocate(opponent, firingCell);
-        if (CanHitFrom(opponent.Cell, target, opponent.Range)) Cast(opponent, target);
-        else Message = opponent.Name + "向前移步。";
     }
 
     static int Distance(Vector2Int a, Vector2Int b) => Math.Abs(a.x - b.x) + Math.Abs(a.y - b.y);

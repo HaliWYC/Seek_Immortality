@@ -72,7 +72,7 @@ public sealed partial class TravelPrototype : MonoBehaviour
             if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) direction.y++;
             if (keyboard.eKey.wasPressedThisFrame) { Interact(); return; }
             if (keyboard.fKey.wasPressedThisFrame) ToggleFlight();
-            if (keyboard.rKey.wasPressedThisFrame) journey.Rest();
+            if (keyboard.rKey.wasPressedThisFrame) Rest();
             if (keyboard.digit1Key.wasPressedThisFrame && journey.CanStartRoute(TravelRoute.Road))
                 journey.StartRoute(TravelRoute.Road);
             if (keyboard.digit2Key.wasPressedThisFrame && journey.CanStartRoute(TravelRoute.Trail))
@@ -236,16 +236,16 @@ public sealed partial class TravelPrototype : MonoBehaviour
         Word(new Rect(x, 177, w, 28), terrain + "    /    " + (journey.Flying ? "御剑" : "步行"), 17, Soft);
         Fill(new Rect(x, 218, w, 1), Border);
         Word(new Rect(x, 229, 92, 26), "法力", 15, Soft);
-        Word(new Rect(x + 111, 229, 137, 26), Mathf.FloorToInt(journey.Mana + 0.001f) + " / 100", 16, Paper, TextAnchor.MiddleRight);
+        Word(new Rect(x + 111, 229, 137, 26), TravelModel.DisplayMana(journey.Mana) + " / " + journey.ManaCapacity, 16, Paper, TextAnchor.MiddleRight);
         Fill(new Rect(x, 261, w, 5), Border);
-        Fill(new Rect(x, 261, w * Mathf.Clamp01(journey.Mana / 100), 5), Green);
+        Fill(new Rect(x, 261, w * Mathf.Clamp01(journey.Mana / journey.ManaCapacity), 5), Green);
         string action = journey.InteractLabel;
         if (Button(new Rect(x, 289, w, 42), string.IsNullOrEmpty(action) ? "靠近出入口可交互" : action + "   E", !string.IsNullOrEmpty(action), true))
             Interact();
         if (Button(new Rect(x, 341, 121, 37), CanFly ? journey.Flying ? "收剑   F" : "御剑   F" : "御剑未习", journey.Place == MapPlace.World && CanFly))
             ToggleFlight();
         if (Button(new Rect(x + 127, 341, 121, 37), "调息   R", journey.CanRest))
-            journey.Rest();
+            Rest();
         Fill(new Rect(x, 398, w, 1), Border);
         Word(new Rect(x, 413, w, 27), "循路赶路", 19, Paper, TextAnchor.MiddleLeft, true);
         Word(new Rect(x, 444, w, 23), "山路勘记", 14, Soft);
@@ -288,7 +288,9 @@ public sealed partial class TravelPrototype : MonoBehaviour
         Fill(new Rect(24, 706, 1152, 1), Border);
         if (MatchesCampaign)
         {
-            Word(new Rect(24, 712, 770, 28), "WASD / 方向键  移动      E  进出地点      F  御剑      R  调息      Tab  行旅簿", 14, Soft);
+            Word(new Rect(24, 712, 596, 28), "WASD / 方向键  移动      E  进出地点      F  御剑      R  调息      Tab  行旅簿", 14, Soft);
+            if (Button(new Rect(630, 710, 105, 30), "行囊   B")) DemoRun.OpenCharacter(true);
+            if (Button(new Rect(744, 710, 129, 30), "人物志   C")) DemoRun.OpenCharacter();
             if (Button(new Rect(883, 710, 135, 30), "修行簿   F1")) DemoRun.OpenCultivation();
             if (Button(new Rect(1031, 710, 145, 30), "卷册   F2")) DemoRun.OpenMenu();
         }

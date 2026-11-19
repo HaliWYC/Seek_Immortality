@@ -63,6 +63,9 @@ public sealed partial class DemoRun
             var saved = ReadSlot(sandbox);
             if (saved != null) SwitchTo(saved); else Begin(sandbox, false);
         }
+        else if (page == Page.Character) CharacterKeys(keys);
+        else if ((page == Page.Menu || page == Page.Guide) && keys.cKey.wasPressedThisFrame) OpenCharacter();
+        else if ((page == Page.Menu || page == Page.Guide) && keys.bKey.wasPressedThisFrame) OpenCharacter(true);
         else if (page == Page.Menu && keys.f2Key.wasPressedThisFrame) CloseWindow();
         else if (page == Page.Guide && keys.f1Key.wasPressedThisFrame) CloseWindow();
         else if (page == Page.Cultivate && keys.f1Key.wasPressedThisFrame) CultivationWindow.Escape();
@@ -78,7 +81,7 @@ public sealed partial class DemoRun
             else CloseWindow();
             return;
         }
-        bool last = PlayerPrefs.GetInt(Archive + "LastSlot", 0) == 1;
+        bool last = PlayerPrefs.GetInt(Archive + "LastSlot", PlayerPrefs.GetInt(PreviousArchive + "LastSlot", 0)) == 1;
         var saved = ReadSlot(last) ?? ReadSlot(!last);
         if (saved != null) SwitchTo(saved); else Show(Page.Story);
     }
@@ -137,11 +140,14 @@ public sealed partial class DemoRun
         int depth = GUI.depth;
         GUI.depth = -900;
         GUI.skin.font = font;
-        bool overlay = page != Page.Play;
+        bool overlay = page != Page.Play && page != Page.Character;
         if (overlay) Block(new Rect(0, 0, Screen.width, Screen.height), new Color(.05f, .105f, .085f, page == Page.Title ? .18f : .63f));
         float scale = Mathf.Min(Screen.width / 1100f, Screen.height / 700f);
-        GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 1100f * scale) / 2f, (Screen.height - 700f * scale) / 2f, 0), Quaternion.identity, new Vector3(scale, scale, 1));
+        Vector3 offset = page == Page.Character ? Vector3.zero :
+            new Vector3((Screen.width - 1100f * scale) / 2f, (Screen.height - 700f * scale) / 2f, 0);
+        GUI.matrix = Matrix4x4.TRS(offset, Quaternion.identity, new Vector3(scale, scale, 1));
         if (page == Page.Cultivate) CultivationWindow.Draw();
+        else if (page == Page.Character) DrawCharacter(Screen.width / scale, Screen.height / scale);
         else if (page == Page.Play) WorldButtons();
         else if (page == Page.Title) Title();
         else if (page == Page.Story || page == Page.Sandbox) CharacterPage(page == Page.Sandbox);
@@ -156,6 +162,8 @@ public sealed partial class DemoRun
     void WorldButtons()
     {
         if (!FreeToOpen || !walker || !walker.CanUseExplorationInput) return;
+        if (Action(568, 15, 112, 34, "行囊  B")) OpenCharacter(true);
+        if (Action(688, 15, 134, 34, "人物志  C")) OpenCharacter();
         if (Action(830, 15, 134, 34, "修行簿  F1")) OpenCultivation();
         if (Action(970, 15, 108, 34, "卷册  F2")) OpenMenu();
         if (AtGate && Action(830, 58, 248, 40, "从东门启程  M", true)) DemoRegion.Depart();
@@ -172,7 +180,7 @@ public sealed partial class DemoRun
         Words(710, 207, 280, 48, "启 卷", 28, Paper, true);
         if (Action(710, 281, 284, 48, "剧情　·　药铺学徒    1", true)) Show(Page.Story);
         if (Action(710, 345, 284, 48, "沙盒　·　自创修士    2")) Show(Page.Sandbox);
-        if (Active || PlayerPrefs.HasKey(Slot(false)) || PlayerPrefs.HasKey(Slot(true)))
+        if (Active || HasSlot(false) || HasSlot(true))
         {
             if (Action(710, 423, 284, 40, "继续上次游历   Enter")) ContinueLast();
         }
@@ -186,7 +194,7 @@ public sealed partial class DemoRun
         Block(new Rect(106, 65, 9, 566), Gold);
         Words(154, 90, 690, 65, sandbox ? "沙盒 · 自立身世" : "剧情 · 青溪药徒", 38, Paper, true);
         if (Action(840, 98, 112, 34, "返回  Esc")) Show(Page.Title);
-        bool exists = PlayerPrefs.HasKey(Slot(sandbox));
+        bool exists = HasSlot(sandbox);
         if (sandbox)
         {
             Words(155, 171, 230, 38, "姓名", 19, Soft);
@@ -245,8 +253,9 @@ public sealed partial class DemoRun
         Words(152, 117, 732, 59, Name + "　·　" + (Sensed ? State.Realm : "凡人"), 33, Paper, true);
         Words(154, 187, 760, 42, (Sandbox ? "沙盒" : "剧情") + "　｜　" + (IsDisciple ? "栖霞外门" : "青溪散人") + "　｜　" + (SingleRoot ? "木天灵根" : "五行杂灵根") + "　｜　灵石 " + State.Stones + "　｜　" + State.Age + " 岁", 18, Gold);
         Words(154, 253, 760, 92, NextStep(), 23, Paper);
-        Words(154, 361, 776, 96, "WASD / 方向键行走，E 就近互动，J 翻草木手记。东门 M 去区域舆图，F1 打开修行簿。山脚巡山弟子可切磋，初感灵气后按 G 可谈护药委托。", 18, Soft);
+        Words(154, 361, 776, 96, "WASD / 方向键行走，E 就近互动，J 翻草木手记。东门 M 去舆图，F1 打开修行簿。C 查人物与所学，B 查行囊。初感灵气后可找山脚巡山弟子谈护药委托。", 18, Soft);
         if (Action(154, 495, 241, 49, "回到游历  Esc", true)) CloseWindow();
         if (page == Page.Menu && Action(416, 495, 253, 49, "保存并返回卷首")) { Save(); Show(Page.Title); }
+        if (Action(693, 495, 222, 49, "翻开人物志")) OpenCharacter();
     }
 }

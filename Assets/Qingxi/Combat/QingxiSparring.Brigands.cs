@@ -40,7 +40,8 @@ public sealed partial class QingxiSparring
             if (confirmDuel) confirmDuel = false; else CloseFieldOffer();
             return;
         }
-        if (keys.digit1Key.wasPressedThisFrame || keys.numpad1Key.wasPressedThisFrame) BrigandChoice(1);
+        if (keys.bKey.wasPressedThisFrame && !confirmDuel) OpenParleyBag();
+        else if (keys.digit1Key.wasPressedThisFrame || keys.numpad1Key.wasPressedThisFrame) BrigandChoice(1);
         else if (keys.digit2Key.wasPressedThisFrame || keys.numpad2Key.wasPressedThisFrame) BrigandChoice(2);
         else if (keys.digit3Key.wasPressedThisFrame || keys.numpad3Key.wasPressedThisFrame) BrigandChoice(3);
         else if (keys.digit4Key.wasPressedThisFrame || keys.numpad4Key.wasPressedThisFrame) BrigandChoice(4);
@@ -86,11 +87,18 @@ public sealed partial class QingxiSparring
                 else if (!brigandTerms.Settled) parleyNote = "灰衣客接了石头，却冲身后的人使眼色。西面还有一条陡坡能绕行。";
                 break;
             case 3:
-                if (brigandTerms.PrepareWard()) parleyNote = "你把三枚灵石压在阵纹上。交锋中由本人按 Q 祭符。";
+                if (brigandTerms.wardReady && !brigandTerms.WardPacked) OpenParleyBag();
+                else if (brigandTerms.PrepareWard()) parleyNote = "破阵符已收入行囊。按 B 放进战斗携带槽，再决定是否应战。";
                 else parleyNote = "制符需要三枚灵石，每场仅可备一张。";
                 break;
             case 4: confirmDuel = true; break;
         }
+    }
+
+    void OpenParleyBag()
+    {
+        parleyNote = "";
+        DemoRun.OpenEncounterBag();
     }
 
     void RecordBrigandOutcome()
@@ -119,7 +127,7 @@ public sealed partial class QingxiSparring
                 brigandTerms.fighting = false;
                 brigandTerms.result = "你在松风隘与筑基劫修的死斗中陨落。";
                 DemoRun.AmbushData = JsonUtility.ToJson(brigandTerms);
-                DemoRun.EndLife(brigandTerms.result);
+                DemoRun.EndLife(brigandTerms.result, showEpitaph: !PlayingAction);
                 break;
         }
     }
@@ -142,10 +150,13 @@ public sealed partial class QingxiSparring
         }
         if (confirmDuel)
         {
-            GUI.Label(new Rect(69, 127, 709, 95), "对方是筑基初期修士。开打之后，你一旦气力耗尽，今生即告终。尚有行动机会时可按 Esc 弃财脱身，折一日、损至多两枚灵石。", fieldBody);
-            GUI.Label(new Rect(69, 231, 709, 62), "战中退出游戏，下次读档按弃财脱身结算。未动手前退回石阶仍来得及。", fieldBody);
+            GUI.Label(new Rect(69, 127, 709, 95), "对方是筑基初期修士。开打之后，你一旦气血耗尽，今生即告终。尚有行动机会时可按 Esc 弃财脱身，折一日、损至多两枚灵石。", fieldBody);
+            GUI.Label(new Rect(69, 218, 709, 62), "战中退出，下次读档按弃财脱身结算，已用法力一并记入存档。", fieldBody);
+            GUI.Label(new Rect(69, 265, 709, 32), $"以现有法力 {TravelModel.DisplayMana(DemoRun.Mana)}/{DemoRun.ManaCapacity} 入阵。", fieldBody);
             DrawBrigandChoice(308, "1　拔剑入阵，承担生死", 1, true);
             DrawBrigandChoice(366, "2　还剑入鞘，重新谈判", 2, true);
+            if (brigandTerms.wardReady && !brigandTerms.WardPacked)
+                GUI.Label(new Rect(69, 424, 707, 52), "破阵符还在行囊。可返回谈判，按 B 把它放入携带槽。", fieldBody);
             return;
         }
         string posture = BrigandTerms.CutsOffRoad ? "瘦高个挪到西南岔口，袖口朝着你的背影。石阶外侧还有一线陡坡。"
@@ -154,12 +165,14 @@ public sealed partial class QingxiSparring
             "灰衣客拢起长袖，筑基威压隐隐透出。他说：「留两枚灵石，我们便让路。」";
         GUI.Label(new Rect(69, 121, 711, 79), clue, fieldBody);
         GUI.Label(new Rect(69, 202, 710, 53), string.IsNullOrEmpty(parleyNote) ?
-            $"行囊 {DemoRun.State.Stones} 灵石　·　" + (brigandTerms.wardReady ? "已备破阵符" : "随时可以退回石阶，择日再过。") : parleyNote, fieldBody);
+            $"行囊 {DemoRun.State.Stones} 灵石　·　" + (brigandTerms.WardPacked ? "携带槽已装破阵符" :
+                brigandTerms.wardReady ? "破阵符在行囊，按 B 装入携带槽" : "随时可以退回石阶，择日再过。") : parleyNote, fieldBody);
         DrawBrigandChoice(263, "1　察看同伙的站位与护阵纹路（半个时辰）", 1, !brigandTerms.studied);
         DrawBrigandChoice(315, "2　依言交出两枚灵石，看看他是否放行", 2,
             !brigandTerms.paid && DemoRun.State.Stones >= BrigandTerms.Toll);
-        DrawBrigandChoice(367, "3　用三枚灵石备一张破阵符（战中 Q，未识阵眼伤六）", 3,
-            !brigandTerms.wardReady && !brigandTerms.wardSpent && DemoRun.State.Stones >= BrigandTerms.WardPrice);
+        DrawBrigandChoice(367, brigandTerms.WardPacked ? "破阵符已装入携带槽" : brigandTerms.wardReady ?
+            "3 / B　打开行囊，装入破阵符" : "3　用三枚灵石备一张破阵符（未识阵眼伤六）", 3,
+            !brigandTerms.wardSpent && !brigandTerms.WardPacked && (brigandTerms.wardReady || DemoRun.State.Stones >= BrigandTerms.WardPrice));
         DrawBrigandChoice(419, "4　掂量胜算，准备生死交锋", 4, true);
         GUI.Label(new Rect(69, 472, 710, 36), brigandTerms.paid ? "灵石已交，若折返西坡需绕行一日。" : "酬物或性命由你权衡。先行退开可再备足灵石。", fieldBody);
     }

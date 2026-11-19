@@ -55,6 +55,7 @@ public sealed partial class TravelModel
     public Vector2 Position { get; private set; } = LocalArrival;
     public double Minutes { get; private set; }
     public bool Flying { get; private set; }
+    public int ManaCapacity { get; private set; } = 100;
     public float Mana { get; private set; } = 100f;
     public string Notice { get; private set; } = "镇口整装。沿官道拜山，或向松风隘自行探路。";
     public bool IsAuto => guidedPath != null;
@@ -236,18 +237,29 @@ public sealed partial class TravelModel
 
     public void Notify(string message) => Notice = message;
 
-    public bool CanRest => Mana < 99.999f && Walkable(Place, Position);
+    public static int DisplayMana(float mana) => Mathf.FloorToInt(mana);
+
+    internal void SetMana(float mana) => Mana = Mathf.Clamp(mana, 0f, ManaCapacity);
+
+    public void SetManaCapacity(int capacity)
+    {
+        if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
+        ManaCapacity = capacity;
+        Mana = Mathf.Min(Mana, capacity);
+    }
+
+    public bool CanRest => Mana < ManaCapacity && Walkable(Place, Position);
     public void Rest()
     {
         if (!CanRest)
         {
-            Notice = Mana >= 99.999f ? "当前法力充沛。" : "此处无立足之地，无法调息。";
+            Notice = Mana >= ManaCapacity ? "当前法力充沛。" : "此处无立足之地，无法调息。";
             return;
         }
         CancelAuto();
         Flying = false;
         Minutes += 120;
-        Mana = 100;
+        Mana = ManaCapacity;
         Notice = "静坐一个时辰，法力已复。";
     }
 

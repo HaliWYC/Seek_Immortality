@@ -1,0 +1,99 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6de34019a8f54c778f5d3ec717726fdf, type: 3}
+  m_Name: QinglanRealms
+  m_EditorClassIdentifier: Assembly-CSharp::CultivationRealms
+  stages:
+  - id: mortal
+    displayName: 凡人
+    major: 0
+    phase: 0
+    minimumQi: 0
+    fitnessBonus: 0
+    strengthBonus: 0
+    meridianBonus: 0
+    reaction: 10
+    flight: 0
+  - id: first_sense
+    displayName: 初感灵气
+    major: 0
+    phase: 1
+    minimumQi: 0
+    fitnessBonus: 0
+    strengthBonus: 0
+    meridianBonus: 0
+    reaction: 10
+    flight: 0
+  - id: qi_early
+    displayName: 炼气初期
+    major: 1
+    phase: 2
+    minimumQi: 1
+    fitnessBonus: 1
+    strengthBonus: 1
+    meridianBonus: 0
+    reaction: 11
+    flight: 0
+  - id: qi_middle
+    displayName: 炼气中期
+    major: 1
+    phase: 3
+    minimumQi: 6
+    fitnessBonus: 2
+    strengthBonus: 2
+    meridianBonus: 0
+    reaction: 12
+    flight: 1
+  - id: qi_late
+    displayName: 炼气后期
+    major: 1
+    phase: 4
+    minimumQi: 9
+    fitnessBonus: 4
+    strengthBonus: 2
+    meridianBonus: 1
+    reaction: 13
+    flight: 1
+  - id: qi_complete
+    displayName: 炼气圆满
+    major: 1
+    phase: 6
+    minimumQi: 12
+    fitnessBonus: 4
+    strengthBonus: 2
+    meridianBonus: 1
+    reaction: 14
+    flight: 1
+  - id: foundation_early
+    displayName: 筑基初期
+    major: 2
+    phase: 2
+    minimumQi: 0
+    fitnessBonus: 6
+    strengthBonus: 4
+    meridianBonus: 3
+    reaction: 16
+    flight: 1
+  mixedRoots:
+    displayName: 五行杂灵根
+    wood: 20
+    fire: 20
+    earth: 20
+    metal: 20
+    water: 20
+  woodRoot:
+    displayName: 木天灵根
+    wood: 100
+    fire: 0
+    earth: 0
+    metal: 0
+    water: 0

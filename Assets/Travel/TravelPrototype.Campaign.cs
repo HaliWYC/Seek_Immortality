@@ -12,6 +12,8 @@ public sealed partial class TravelPrototype
 
     public MapPlace Place => journey.Place;
     public bool LogOpen => showLog;
+    internal float Mana => journey.Mana;
+    internal void ApplyMana(float mana) => journey.SetMana(mana);
     internal bool MatchesCampaign => campaignKey != null && DemoRun.Active &&
         ReferenceEquals(campaignState, DemoRun.State) && campaignKey == DemoRun.Key("Region");
     bool CanFly => campaignKey == null || (MatchesCampaign && DemoRun.State.CanFly);
@@ -21,17 +23,21 @@ public sealed partial class TravelPrototype
     {
         campaignKey = DemoRun.Key("Region");
         campaignState = DemoRun.State;
+        journey.SetManaCapacity(DemoRun.ManaCapacity);
+        float balance = DemoRun.Mana;
         string snapshot = DemoRun.RegionData;
         if (!string.IsNullOrEmpty(snapshot))
         {
             try
             {
                 var checkpoint = JsonUtility.FromJson<TravelCheckpoint>(snapshot);
+                if (checkpoint != null) checkpoint.mana = balance;
                 if (journey.Restore(checkpoint) && checkpoint.log != null)
                     for (int i = 0; i < Mathf.Min(MaxRecords, checkpoint.log.Length); i++) log.Add(checkpoint.log[i]);
             }
             catch (ArgumentException) { journey.Notify("舆图已从青溪镇口重新展开。"); }
         }
+        journey.SetMana(balance);
         if (Place == MapPlace.Town) journey.Interact();
         completed = journey.CompletedTrips;
         reportedMinutes = journey.Minutes;
@@ -44,6 +50,8 @@ public sealed partial class TravelPrototype
     internal void CaptureCampaign()
     {
         if (!MatchesCampaign) return;
+        journey.SetManaCapacity(DemoRun.ManaCapacity);
+        DemoRun.CaptureMana(journey.Mana);
         double delta = journey.Minutes - reportedMinutes;
         reportedMinutes = journey.Minutes;
         if (delta > 0) campaignState.AddTravelMinutes(delta);
@@ -90,6 +98,13 @@ public sealed partial class TravelPrototype
         if (MatchesCampaign) DemoRegion.Flush();
     }
 
+    void Rest()
+    {
+        float before = journey.Mana;
+        journey.Rest();
+        if (journey.Mana != before && MatchesCampaign) DemoRegion.Flush();
+    }
+
     void Interact()
     {
         if (ActiveLocal && localView.NearContact(journey))
@@ -114,11 +129,15 @@ public sealed partial class TravelPrototype
     void DrawLocalControls()
     {
         bool sect = Place == MapPlace.Sect;
-        Fill(new Rect(22, 22, 216, 65), Panel);
+        Fill(new Rect(22, 22, 291, 65), Panel);
         Fill(new Rect(22, 22, 4, 65), Gold);
         Word(new Rect(38, 28, 184, 29), PlaceName(Place), 23, Paper, TextAnchor.MiddleLeft, true);
-        Word(new Rect(39, 57, 180, 23), sect ? "山门前庭" : "北隘石径", 14, Soft);
+        string location = sect ? "山门前庭" : "北隘石径";
+        Word(new Rect(39, 57, 267, 23), $"{location}　·　法力 {TravelModel.DisplayMana(journey.Mana)} / {journey.ManaCapacity}", 14, Soft);
+        if (Button(new Rect(566, 24, 107, 36), "行囊   B")) DemoRun.OpenCharacter(true);
+        if (Button(new Rect(683, 24, 140, 36), "调息   R", journey.CanRest)) Rest();
         if (Button(new Rect(994, 24, 181, 36), "行旅簿   Tab")) showLog = true;
+        if (Button(new Rect(833, 24, 151, 36), "人物志   C")) DemoRun.OpenCharacter();
         Fill(new Rect(22, 648, 1154, 75), Panel);
         string action = localView.NearContact(journey) ? sect ? "拜访山门执事" : "察看石隙药圃" : journey.InteractLabel;
         bool stranger = localView.NearBrigand(journey);

@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40a54fba6e7249a9a3cf37f1b8428a67, type: 3}
+  m_Name: Ward
+  m_EditorClassIdentifier:
+  id: spell.ward
+  displayName: 护体诀
+  description: 运厚土护住自身。接下来两次受到直接攻击时，每次抵挡至多两点伤害。厚土配离火或锐金相生时，每次至多抵挡三点。
+  source: 同场切磋 · 赤炉护体借演
+  rarity: 1
+  miniRarity: 0
+  shuXing: 4
+  faShuType: 0
+  sourceType: 0
+  target: 0
+  duration: 0
+  level: 1
+  proficiency: 0
+  effect: 5
+  range: 0
+  extraPower: 0
+  cooldownTurns: 0
+  conversionAmount: 0
+  trainingDays: 1
+  manaCost: 3
+  actionPointCost: 0
+  fixedCosts:
+  - element: 4
+    amount: 1
+  sameCost: 1
+  effectAmount: 2
+  effectTurns: 2
+  generatingBonus: 1

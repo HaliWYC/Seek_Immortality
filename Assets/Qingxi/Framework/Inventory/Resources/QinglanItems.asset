@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a65d78499b774bc6906bc35cfec6ce95, type: 3}
+  m_Name: QinglanItems
+  m_EditorClassIdentifier: Assembly-CSharp::FirstVolumeItems
+  items:
+  - id: currency.spirit_stone
+    displayName: 灵石
+    kind: 0
+    stackSize: 1
+    price: 0
+    reservedPocket: 0
+    description: 山门与散修通用的货币。另收在钱袋中，可用于买丹、问医或赴约。
+  - id: herb.jade_marrow
+    displayName: 玉髓芝
+    kind: 1
+    stackSize: 8
+    price: 0
+    reservedPocket: 1
+    description: 松风隘石壁间生长的灵芝。两株可入炉合成一枚筑基丹，姜遥也在寻它。
+  - id: pill.foundation
+    displayName: 筑基丹
+    kind: 2
+    stackSize: 6
+    price: 4
+    reservedPocket: 1
+    description: 冲关前服用，每枚为起手气池添两缕木气。一次至多服三枚，启关即耗。
+  - id: medicine.meridian_dew
+    displayName: 护脉露
+    kind: 3
+    stackSize: 1
+    price: 3
+    reservedPocket: 1
+    description: 医者调配或在松风隘候得的一瓶药露。入关前服下可暂压旧伤，药效仅及此次冲关。
+  - id: gear.qingxi_blade
+    displayName: 青溪短剑
+    kind: 4
+    stackSize: 1
+    price: 0
+    reservedPocket: 0
+    description: 青溪铁匠打的短剑，刃口未开灵纹，足以随身护行。佩用后提高野外斗法的基础术威。
+    gearSlot: 1
+    attackBonus: 1
+    healthBonus: 0
+  - id: gear.travel_coat
+    displayName: 粗布衣
+    kind: 4
+    stackSize: 1
+    price: 0
+    reservedPocket: 0
+    description: 耐磨的夹层布衣，袖口收紧，赶路时不易被枝蔓勾住。穿上可提高野外斗法的气血上限。
+    gearSlot: 2
+    attackBonus: 0
+    healthBonus: 3
+  - id: gear.spirit_pendant
+    displayName: 灵纹玉佩
+    kind: 4
+    stackSize: 1
+    price: 0
+    reservedPocket: 0
+    description: 玉佩正面刻着一圈引气纹。佩戴可提高术威，并能在斗法中催动玉芒。
+    gearSlot: 3
+    attackBonus: 1
+    healthBonus: 0
+    grantedSpellId: spell.jade-ray
+  - id: pill.spring
+    displayName: 回春丹
+    kind: 2
+    stackSize: 6
+    price: 0
+    reservedPocket: 0
+    description: 备在战斗携带槽中，受伤时可在自己行动中服用，消耗两点行动力，最多回复四点气血。
+    carryEffect: 1
+    carryHeal: 4
+    carryActionCost: 2
+  - id: quest.road_ward
+    displayName: 破阵符
+    kind: 5
+    stackSize: 1
+    price: 0
+    reservedPocket: 0
+    description: 用于应对灰衣客的护身阵。放入战斗携带槽后，可在松风隘交战时花费两点行动力祭出。
+    carryEffect: 2
+    carryActionCost: 2

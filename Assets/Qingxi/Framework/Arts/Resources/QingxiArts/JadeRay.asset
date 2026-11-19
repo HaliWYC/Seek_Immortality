@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40a54fba6e7249a9a3cf37f1b8428a67, type: 3}
+  m_Name: JadeRay
+  m_EditorClassIdentifier:
+  id: spell.jade-ray
+  displayName: 玉芒
+  description: 引一缕灵气入佩，向视线内四格的敌人发出玉芒，此击术威加一。施放后要等过一次自己的行动方可再次催动。
+  source: 佩戴灵纹玉佩后可在斗法中使用
+  rarity: 1
+  miniRarity: 0
+  shuXing: 5
+  faShuType: 3
+  sourceType: 1
+  target: 1
+  duration: 0
+  level: 1
+  proficiency: 0
+  effect: 0
+  range: 4
+  extraPower: 1
+  cooldownTurns: 1
+  conversionAmount: 0
+  trainingDays: 0
+  manaCost: 3
+  actionPointCost: 0
+  fixedCosts: []
+  sameCost: 1
+  effectAmount: 0
+  effectTurns: 0
+  generatingBonus: 0

@@ -142,7 +142,7 @@ public static class CultivationWindow
 
     static void DrawPractice()
     {
-        Label(80, 195, 680, 42, S.Foundation ? S.QualityName : S.Manual ? "归元篇 · 行功" : "初识灵气，山门求法", 28, Ink, true);
+        Label(80, 195, 680, 42, S.Foundation ? S.QualityName : S.Manual ? S.MainManual.Name + " · 行功" : "初识灵气，山门求法", 28, Ink, true);
         if (!S.Manual)
         {
             Label(80, 252, 880, 100, "栖霞宗山门存有一册《归元篇》。从青溪镇出发，沿官道或山径抵达山门，向知客借卷。宗门准许散修抄录，不收束脩。", 21, Ink);
@@ -154,7 +154,7 @@ public static class CultivationWindow
         Meter(82, 299, 887, S.Qi, DemoCultivation.Bottleneck, Pine);
         string info = S.Foundation ? "筑基已成。山路仍可再走，故人也可重访。" :
             S.Qi == DemoCultivation.Bottleneck ? "气海抵达瓶颈。可到丹房备药、向名医学护脉，再选冲关的时日。" :
-            "在镇中静处或宗门静室，每坐满一季，历时九十日，累积三份修为。炼气中期开始可御剑赶路。";
+            $"在镇中静处或宗门静室，每坐满一季，历时九十日，依《{S.MainManual.Name}》积累 {S.MainManual.QiPerSeason} 份修为。炼气中期开始可御剑赶路。";
         Label(80, 325, 890, 68, info, 19, Ink);
         bool train = QuietPlace && !S.Foundation && S.Qi < DemoCultivation.Bottleneck;
         if (Button(80, 412, 228, 51, "闭关一季", train, true)) Apply(S.StartRetreat(1, listen));
@@ -197,9 +197,11 @@ public static class CultivationWindow
         Label(80, 300, 904, 56, QuietPlace ? "药房收炉工，也售冲关丹药。栖霞宗传授五行归流术，松风隘可自行采芝。" :
             "此地正在途中。到镇上或宗门可置办丹药，到松风隘可寻草木与护脉露。", 18, Ink);
         if (Button(80, 379, 286, 50, "照看丹炉一月   +3 灵石", QuietPlace && !S.Foundation, true)) Apply(S.Work());
-        if (Button(383, 379, 286, 50, "买筑基丹   4 灵石", QuietPlace && S.Manual && S.Stones >= 4)) Apply(S.BuyPill());
+        int pillPrice = DemoCultivation.PillPrice;
+        if (Button(383, 379, 286, 50, $"买筑基丹   {pillPrice} 灵石", QuietPlace && S.Manual && S.Stones >= pillPrice)) Apply(S.BuyPill());
         if (Button(686, 379, 294, 50, "两株芝合丹   十日", QuietPlace && S.Manual && S.Herbs >= 2)) Apply(S.MakePill());
-        if (Button(80, 451, 286, 50, "医者配护脉露   3 灵石", QuietPlace && S.Injuries > 0 && !S.Dew && S.Stones >= 3)) Apply(S.SeekDoctor());
+        int dewPrice = DemoCultivation.DewPrice;
+        if (Button(80, 451, 286, 50, $"医者配护脉露   {dewPrice} 灵石", QuietPlace && S.Injuries > 0 && !S.Dew && S.Stones >= dewPrice)) Apply(S.SeekDoctor());
         if (Button(383, 451, 370, 50, S.Art ? "已习得五行归流术" : $"山门学归流术   {S.CurrentArtPrice} 灵石", DemoRun.InSect && S.Manual && !S.Art && S.Stones >= S.CurrentArtPrice)) Apply(S.LearnArt());
     }
 

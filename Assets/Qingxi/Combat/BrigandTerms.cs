@@ -11,6 +11,16 @@ public sealed class BrigandTerms
     public bool studied, wardReady, wardSpent, paid, fighting;
     public string result;
     public bool Settled => !string.IsNullOrEmpty(result);
+    public bool WardPacked
+    {
+        get
+        {
+            if (!DemoRun.Active || !wardReady || wardSpent || Settled) return false;
+            for (int slot = 0; slot < CultivatorBag.CarrySlotCount; slot++)
+                if (DemoRun.State.Bag.Carried(slot)?.Id == FirstVolumeItems.RoadSeal) return true;
+            return false;
+        }
+    }
 
     public static BrigandTerms Load()
     {
@@ -27,7 +37,7 @@ public sealed class BrigandTerms
     }
 
     // Stable for the life of this character, including after a return to the pass.
-    public static bool CutsOffRoad => CutsOffRoadFor(DemoRun.Key("ambush"));
+    public static bool CutsOffRoad => CutsOffRoadFor(DemoRun.AmbushSeed);
     public static bool CutsOffRoadFor(string id)
     {
         uint hash = 2166136261u;
@@ -46,10 +56,21 @@ public sealed class BrigandTerms
 
     public bool PrepareWard()
     {
-        if (fighting || Settled || wardReady || wardSpent || !DemoRun.SpendStones(WardPrice)) return false;
+        if (fighting || Settled || wardReady || wardSpent || !DemoRun.Active || DemoRun.Slain ||
+            !DemoRun.State.Bag.TryExchange(FirstVolumeItems.SpiritStone, WardPrice, FirstVolumeItems.RoadSeal, 1)) return false;
         wardReady = true;
         Save();
         return true;
+    }
+
+    public static void RestoreLegacyWard()
+    {
+        if (!DemoRun.Active || DemoRun.Slain) return;
+        var state = Load();
+        var bag = DemoRun.State.Bag;
+        if (state.wardReady && !state.wardSpent && !state.Settled && !state.fighting &&
+            !state.WardPacked && bag.Count(FirstVolumeItems.RoadSeal) == 0)
+            bag.TryAdd(FirstVolumeItems.RoadSeal, 1);
     }
 
     public bool PayToll()
